@@ -20,7 +20,7 @@ namespace Dynamo.Tests
         public void Init()
         {
             model = new NodeSearchModel();
-            viewModel = new SearchViewModel(null, model);
+            viewModel = new SearchViewModel(model);
         }
 
         [Test]
@@ -40,15 +40,12 @@ namespace Dynamo.Tests
             model.Add(new CustomNodeSearchElement(null, new CustomNodeInfo(Guid.NewGuid(), "Noodle", catName, descr, path)));
 
             viewModel.SearchAndUpdateResults("xy");
-            viewModel.PopulateSearchTextWithSelectedResult();
             Assert.AreEqual("xyz", viewModel.SearchText);
 
             viewModel.SearchAndUpdateResults("ood");
-            viewModel.PopulateSearchTextWithSelectedResult();
             Assert.AreEqual("Noodle", viewModel.SearchText);
 
             viewModel.SearchAndUpdateResults("do");
-            viewModel.PopulateSearchTextWithSelectedResult();
             Assert.AreEqual("dog", viewModel.SearchText);
         }
 

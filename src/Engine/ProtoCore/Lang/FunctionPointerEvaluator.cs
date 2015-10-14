@@ -15,7 +15,7 @@ namespace ProtoCore.Lang
         private Interpreter interpreter;
         private ProcedureNode procNode;
         private CallSite callsite;
-        public string Name { get { return procNode.name; } }
+        public string Name { get { return procNode.Name; } }
 
         public FunctionPointerEvaluator(StackValue pointer, Interpreter dsi)
         {
@@ -45,7 +45,7 @@ namespace ProtoCore.Lang
 
             int classScopeCaller = stackFrame.ClassScope;
             int returnAddr = stackFrame.ReturnPC;
-            int blockDecl = procNode.runtimeIndex;
+            int blockDecl = procNode.RuntimeIndex;
             int blockCaller = stackFrame.FunctionCallerBlock;
             int framePointer = runtimeCore.RuntimeMemory.FramePointer;
             StackValue thisPtr = StackValue.BuildPointer(Constants.kInvalidIndex);
@@ -59,22 +59,22 @@ namespace ProtoCore.Lang
             // to
             // 
             //    {a1, a2, ..., am, {v1, v2, ..., vn}}
-            if (procNode.isVarArg)
+            if (procNode.IsVarArg)
             {
-                int paramCount = procNode.argInfoList.Count;
+                int paramCount = procNode.ArgumentInfos.Count;
                 Validity.Assert(paramCount >= 1);
 
                 int varParamCount = args.Count - (paramCount - 1);
                 var varParams = args.GetRange(paramCount - 1, varParamCount).ToArray();
                 args.RemoveRange(paramCount - 1, varParamCount);
 
-                var packedParams = interpreter.runtime.rmem.Heap.AllocateArray(varParams, null);
+                var packedParams = interpreter.runtime.rmem.Heap.AllocateArray(varParams);
                 args.Add(packedParams);
             }
 
-            bool isCallingMemberFunciton = procNode.classScope != Constants.kInvalidIndex 
-                                           && !procNode.isConstructor 
-                                           && !procNode.isStatic;
+            bool isCallingMemberFunciton = procNode.ClassID != Constants.kInvalidIndex 
+                                           && !procNode.IsConstructor 
+                                           && !procNode.IsStatic;
 
             bool isValidThisPointer = true;
             if (isCallingMemberFunciton)
@@ -155,7 +155,7 @@ namespace ProtoCore.Lang
         public static string GetMethodName(StackValue pointer, Interpreter dsi)
         {
             Validity.Assert(pointer.IsFunctionPointer);
-            return dsi.runtime.exe.procedureTable[0].procList[(int)pointer.opdata].name;
+            return dsi.runtime.exe.procedureTable[0].procList[(int)pointer.opdata].Name;
         }
     }
 }

@@ -1,9 +1,6 @@
-﻿
-using System.Linq;
-using ProtoCore.DSASM;
+﻿using ProtoCore.DSASM;
 using System.Collections.Generic;
 using ProtoCore.AST.AssociativeAST;
-using System;
 
 namespace ProtoCore.Utils
 {
@@ -123,47 +120,6 @@ namespace ProtoCore.Utils
         ProtoCore.AST.AssociativeAST.IdentifierNode _return = BuildAssocIdentifier(core, ProtoCore.DSDefinitions.Keyword.Return, ProtoCore.PrimitiveType.kTypeReturn);
         ProtoCore.AST.AssociativeAST.IdentifierNode param = BuildAssocIdentifier(core, "%param");
         body.Body.Add(new ProtoCore.AST.AssociativeAST.BinaryExpressionNode() { LeftNode = _return, Optr = ProtoCore.DSASM.Operator.assign, RightNode = new ProtoCore.AST.AssociativeAST.UnaryExpressionNode() { Expression = param, Operator = op } });
-        funcDefNode.FunctionBody = body;
-        (root as ProtoCore.AST.AssociativeAST.CodeBlockNode).Body.Add(funcDefNode);
-    }
-
-	private static void InsertInlineConditionOperationMethod(Core core, ProtoCore.AST.Node root, PrimitiveType condition, PrimitiveType r)
-    {
-        ProtoCore.AST.AssociativeAST.FunctionDefinitionNode funcDefNode = new ProtoCore.AST.AssociativeAST.FunctionDefinitionNode();
-        funcDefNode.access = ProtoCore.CompilerDefinitions.AccessModifier.kPublic;
-        funcDefNode.Name = ProtoCore.DSASM.Constants.kInlineCondition; 
-        funcDefNode.ReturnType = new ProtoCore.Type() { Name = core.TypeSystem.GetType((int)r), UID = (int)r };
-        ProtoCore.AST.AssociativeAST.ArgumentSignatureNode args = new ProtoCore.AST.AssociativeAST.ArgumentSignatureNode();
-        args.AddArgument(new ProtoCore.AST.AssociativeAST.VarDeclNode()
-        {
-            memregion = ProtoCore.DSASM.MemoryRegion.kMemStack,
-            access = ProtoCore.CompilerDefinitions.AccessModifier.kPublic,
-            NameNode = BuildAssocIdentifier(core, "%condition"),
-            ArgumentType = new ProtoCore.Type { Name = core.TypeSystem.GetType((int)condition), UID = (int)condition }
-        });
-        args.AddArgument(new ProtoCore.AST.AssociativeAST.VarDeclNode()
-        {
-            memregion = ProtoCore.DSASM.MemoryRegion.kMemStack,
-            access = ProtoCore.CompilerDefinitions.AccessModifier.kPublic,
-            NameNode = BuildAssocIdentifier(core, "%trueExp"),
-            ArgumentType = new ProtoCore.Type { Name = core.TypeSystem.GetType((int)r), UID = (int)r }
-        });
-        args.AddArgument(new ProtoCore.AST.AssociativeAST.VarDeclNode()
-        {
-            memregion = ProtoCore.DSASM.MemoryRegion.kMemStack,
-            access = ProtoCore.CompilerDefinitions.AccessModifier.kPublic,
-            NameNode = BuildAssocIdentifier(core, "%falseExp"),
-            ArgumentType = new ProtoCore.Type { Name = core.TypeSystem.GetType((int)r), UID = (int)r }
-        });
-        funcDefNode.Signature = args;
-
-        ProtoCore.AST.AssociativeAST.CodeBlockNode body = new ProtoCore.AST.AssociativeAST.CodeBlockNode();
-        ProtoCore.AST.AssociativeAST.IdentifierNode _return = BuildAssocIdentifier(core, ProtoCore.DSDefinitions.Keyword.Return, ProtoCore.PrimitiveType.kTypeReturn);
-        ProtoCore.AST.AssociativeAST.IdentifierNode con = BuildAssocIdentifier(core, "%condition");
-        ProtoCore.AST.AssociativeAST.IdentifierNode t = BuildAssocIdentifier(core, "%trueExp");
-        ProtoCore.AST.AssociativeAST.IdentifierNode f = BuildAssocIdentifier(core, "%falseExp");
-
-        body.Body.Add(new ProtoCore.AST.AssociativeAST.BinaryExpressionNode() { LeftNode = _return, Optr = Operator.assign, RightNode = new ProtoCore.AST.AssociativeAST.InlineConditionalNode() { ConditionExpression = con, TrueExpression = t, FalseExpression = f } });
         funcDefNode.FunctionBody = body;
         (root as ProtoCore.AST.AssociativeAST.CodeBlockNode).Body.Add(funcDefNode);
     }
@@ -341,18 +297,6 @@ namespace ProtoCore.Utils
             return false;
         }
 
-        public static bool IsGlobalInstanceSetter(string propertyName)
-        {
-            Validity.Assert(null != propertyName);
-            return propertyName.StartsWith(ProtoCore.DSASM.Constants.kGlobalInstanceNamePrefix) && propertyName.Contains(ProtoCore.DSASM.Constants.kSetterPrefix);
-        }
-
-        public static bool GetGlobalInstanceSetterName(string propertyName)
-        {
-            Validity.Assert(null != propertyName);
-            return propertyName.StartsWith(ProtoCore.DSASM.Constants.kGlobalInstanceNamePrefix) && propertyName.Contains(ProtoCore.DSASM.Constants.kSetterPrefix);
-        }
-
         public static bool IsInternalMethod(string methodName)
         {
             Validity.Assert(null != methodName);
@@ -363,27 +307,6 @@ namespace ProtoCore.Utils
         {
             Validity.Assert(null != propertyName);
             return IsGetter(propertyName) || IsSetter(propertyName);
-        }
-
-
-        public static bool IsGlobalInstanceGetterSetter(string propertyName)
-        {
-            Validity.Assert(null != propertyName);
-            return propertyName.StartsWith(ProtoCore.DSASM.Constants.kGlobalInstanceNamePrefix) && IsGetterSetter(propertyName);
-        }
-
-        public static string GetMangledFunctionName(string className, string functionName)
-        {
-            string name = ProtoCore.DSASM.Constants.kGlobalInstanceNamePrefix + className + ProtoCore.DSASM.Constants.kGlobalInstanceFunctionPrefix + functionName;
-            return name;
-        }
-
-        public static string GetMangledFunctionName(int classIndex, string functionName, Core core)
-        {
-            Validity.Assert(classIndex < core.ClassTable.ClassNodes.Count);
-            ClassNode cnode = core.ClassTable.ClassNodes[classIndex];
-            string name = ProtoCore.DSASM.Constants.kGlobalInstanceNamePrefix + cnode.name + ProtoCore.DSASM.Constants.kGlobalInstanceFunctionPrefix + functionName;
-            return name;
         }
 
         public static string BuildSSATemp(Core core)
@@ -564,67 +487,6 @@ namespace ProtoCore.Utils
             return exprlist;
         }
 
-
-        // Comment Jun: 
-        // Instead of this method, consider storing the name mangled methods original class name and varname
-        public static string GetClassDeclarationName(ProcedureNode procNode, Core core)
-        {
-            string mangledName = procNode.name;
-            mangledName = mangledName.Remove(0, ProtoCore.DSASM.Constants.kGlobalInstanceNamePrefix.Length);
-
-            int start = mangledName.IndexOf(ProtoCore.DSASM.Constants.kGlobalInstanceFunctionPrefix);
-            mangledName = mangledName.Remove(start);
-            return mangledName;
-
-            if (ProtoCore.DSASM.Constants.kInvalidIndex == procNode.classScope)
-            {
-                return string.Empty;
-            }
-
-            Validity.Assert(core.ClassTable.ClassNodes.Count > procNode.classScope);
-            return core.ClassTable.ClassNodes[procNode.classScope].name;
-        }
-
-
-
-        public static ProcedureNode GetClassAndProcFromGlobalInstance(ProcedureNode procNode, Core core, out int classIndex, List<Type> argTypeList)
-        {
-            string className = ProtoCore.Utils.CoreUtils.GetClassDeclarationName(procNode, core);
-            classIndex = core.ClassTable.IndexOf(className);
-
-
-            int removelength = 0;
-            if (ProtoCore.Utils.CoreUtils.IsGlobalInstanceGetterSetter(procNode.name))
-            {
-                if (ProtoCore.Utils.CoreUtils.IsGlobalInstanceSetter(procNode.name))
-                {
-                    removelength = procNode.name.IndexOf(ProtoCore.DSASM.Constants.kSetterPrefix);
-                }
-                else
-                {
-                    removelength = procNode.name.IndexOf(ProtoCore.DSASM.Constants.kGetterPrefix);
-                }
-            }
-            else
-            {
-                removelength = procNode.name.IndexOf(ProtoCore.DSASM.Constants.kGlobalInstanceFunctionPrefix);
-                removelength += ProtoCore.DSASM.Constants.kGlobalInstanceFunctionPrefix.Length;
-            }
-
-            string functionName = procNode.name.Remove(0, removelength);
-            //ProtoCore.DSASM.ProcedureNode tmpProcNode = core.ClassTable.list[classIndex].GetFirstMemberFunction(functionName, procNode.argTypeList.Count - 1);
-
-            int functionIndex = core.ClassTable.ClassNodes[classIndex].vtable.IndexOfExact(functionName, argTypeList, procNode.isAutoGeneratedThisProc);
-            ProtoCore.DSASM.ProcedureNode tmpProcNode = core.ClassTable.ClassNodes[classIndex].vtable.procList[functionIndex];
-
-            return tmpProcNode;
-        }
-
-        public static bool Compare(ProtoCore.AST.Node node1, ProtoCore.AST.Node node2)
-        {
-            return node1.Equals(node2);
-        }
-
         public static void CopyDebugData(ProtoCore.AST.Node nodeTo, ProtoCore.AST.Node nodeFrom)
         {
             if (null != nodeTo && null != nodeFrom)
@@ -635,7 +497,6 @@ namespace ProtoCore.Utils
                 nodeTo.line = nodeFrom.line;
             }
         }
-
 
         /// <summary>
         /// Gets the has id of a function signature given the name and argument types
@@ -688,20 +549,48 @@ namespace ProtoCore.Utils
         ///     Return: "A"
         /// Given: A.B[0].C
         ///     Return: "A.B[0].C"
+        /// Given: A().B (global function)
+        ///     Return: empty string
+        /// Given: A.B[0].C()
+        ///     Return: "A.B[0]"
         /// </summary>
         /// <param name="identList"></param>
         /// <returns></returns>
-        public static string GetIdentifierExceptMethodName(ProtoCore.AST.AssociativeAST.IdentifierListNode identList)
+        public static string GetIdentifierExceptMethodName(IdentifierListNode identList)
         {
             Validity.Assert(null != identList);
-            string identListString = identList.ToString();
-            int removeIndex = identListString.IndexOf('(');
-            if (removeIndex > 0)
+
+            var leftNode = identList.LeftNode;
+            var rightNode = identList.RightNode;
+
+            var intermediateNodes = new List<AssociativeNode>();
+            if (!(rightNode is FunctionCallNode))
             {
-                identListString = identListString.Remove(removeIndex);
-                identListString = identListString.Remove(identListString.LastIndexOf('.'));
+                intermediateNodes.Insert(0, rightNode);
             }
-            return identListString;
+
+            while (leftNode is IdentifierListNode)
+            {
+                rightNode = ((IdentifierListNode) leftNode).RightNode;
+                if (rightNode is FunctionCallNode)
+                {
+                    intermediateNodes.Clear();
+                }
+                else
+                {
+                    intermediateNodes.Insert(0, rightNode);
+                }
+                leftNode = ((IdentifierListNode)leftNode).LeftNode;
+                
+            }
+            if (leftNode is FunctionCallNode)
+            {
+                intermediateNodes.Clear();
+                return "";
+            }
+            intermediateNodes.Insert(0, leftNode);
+
+            return CreateNodeByCombiningIdentifiers(intermediateNodes).ToString();
         }
 
         /// <summary>

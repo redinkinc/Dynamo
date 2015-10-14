@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Autodesk.DesignScript.Interfaces;
 using System.Reflection;
 using ProtoCore.DSASM;
@@ -117,7 +115,7 @@ namespace ProtoCore.Mirror
             return provider;
         }
 
-        public void Tessellate(List<object> objects, IRenderPackage package, double tol)
+        public void Tessellate(List<object> objects, IRenderPackage package, TessellationParameters parameters)
         {
             foreach (var item in objects)
             {
@@ -127,7 +125,7 @@ namespace ProtoCore.Mirror
 
                 foreach (var g in graphicItems)
                 {
-                    g.Tessellate(package, tol);
+                    g.Tessellate(package, parameters);
                 }
             }
         }
@@ -221,7 +219,7 @@ namespace ProtoCore.Mirror
             return null;
         }
 
-        public void Tessellate(List<object> objects, IRenderPackage package, double tol)
+        public void Tessellate(List<object> objects, IRenderPackage package, TessellationParameters parameters)
         {
             throw new NotImplementedException();
         }

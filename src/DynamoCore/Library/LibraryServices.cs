@@ -1,16 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Xml;
-using System.Xml.Linq;
 
 using Dynamo.Interfaces;
 using Dynamo.Library;
 using Dynamo.Utilities;
-using DynamoUtilities;
+using Dynamo.Logging;
 
 using ProtoCore.AST.AssociativeAST;
 using ProtoCore.BuildData;
@@ -18,12 +15,12 @@ using ProtoCore.DSASM;
 using ProtoCore.Utils;
 using ProtoFFI;
 
-using RestSharp;
 
 using Operator = ProtoCore.DSASM.Operator;
 using ProtoCore;
+using ProtoCore.Namespace;
 
-namespace Dynamo.DSEngine
+namespace Dynamo.Engine
 {
     /// <summary>
     ///     LibraryServices is a singleton class which manages builtin libraries
@@ -37,7 +34,11 @@ namespace Dynamo.DSEngine
         private readonly Dictionary<string, Dictionary<string, FunctionGroup>> importedFunctionGroups =
             new Dictionary<string, Dictionary<string, FunctionGroup>>(new LibraryPathComparer());
 
+        // This list includes all preloaded libraries, packaged libraries, and zero-touch imported libraries
         private readonly List<string> importedLibraries = new List<string>();
+
+        // This list includes all libraries loaded from package folders
+        private readonly List<string> packagedLibraries = new List<string>();
 
         private readonly IPathManager pathManager;
         public ProtoCore.Core LibraryManagementCore{get; private set;}
@@ -137,6 +138,10 @@ namespace Dynamo.DSEngine
 
         public bool FunctionSignatureNeedsAdditionalAttributes(string functionSignature)
         {
+            if (functionSignature == null)
+            {
+                return false;
+            }
             if (!priorNameHints.ContainsKey(functionSignature))
                 return false;
 
@@ -145,6 +150,10 @@ namespace Dynamo.DSEngine
 
         public bool FunctionSignatureNeedsAdditionalElements(string functionSignature)
         {
+            if (functionSignature == null)
+            {
+                return false;
+            }
             if (!priorNameHints.ContainsKey(functionSignature))
                 return false;
 
@@ -153,7 +162,13 @@ namespace Dynamo.DSEngine
 
         public void AddAdditionalAttributesToNode(string functionSignature, XmlElement nodeElement)
         {
-            var upgradeHint = priorNameHints[functionSignature];
+            var shortKey = GetQualifiedFunction(functionSignature);
+            if (!FunctionSignatureNeedsAdditionalAttributes(functionSignature)
+                && !FunctionSignatureNeedsAdditionalAttributes(shortKey)) return;
+
+            var upgradeHint = FunctionSignatureNeedsAdditionalAttributes(functionSignature)
+                ? priorNameHints[functionSignature]
+                : priorNameHints[shortKey];
 
             foreach (string key in upgradeHint.AdditionalAttributes.Keys)
             {
@@ -171,7 +186,13 @@ namespace Dynamo.DSEngine
 
         public void AddAdditionalElementsToNode(string functionSignature, XmlElement nodeElement)
         {
-            var upgradeHint = priorNameHints[functionSignature];
+            var shortKey = GetQualifiedFunction(functionSignature);
+            if (!FunctionSignatureNeedsAdditionalElements(functionSignature)
+                && !FunctionSignatureNeedsAdditionalElements(shortKey)) return;
+
+            var upgradeHint = FunctionSignatureNeedsAdditionalElements(functionSignature)
+                ? priorNameHints[functionSignature]
+                : priorNameHints[shortKey];
 
             foreach (XmlElement elem in upgradeHint.AdditionalElements)
             {
@@ -213,6 +234,11 @@ namespace Dynamo.DSEngine
 
             splitted = newName.Split('.');
 
+            // Case for BuitIn nodes, because they don't have namespace or class.
+            if (splitted.Length == 1)
+                return newName;
+
+            // Other nodes should have at least 2 parameters.
             if (splitted.Length < 2)
                 return null;
 
@@ -239,6 +265,22 @@ namespace Dynamo.DSEngine
             string newName = priorNameHints[qualifiedFunction].UpgradeName;
 
             return newName + "@" + splitted[1];
+        }
+
+        private string GetQualifiedFunction(string functionSignature)
+        {
+            // get a short name representation of the function without parameters
+            string[] splitted = functionSignature.Split('@');
+           
+            if (splitted.Length < 1 || String.IsNullOrEmpty(splitted[0]))
+                return null;
+
+            string qualifiedFunction = splitted[0];
+
+            if (!priorNameHints.ContainsKey(qualifiedFunction))
+                return null;
+
+            return qualifiedFunction;
         }
 
         /// <summary>
@@ -439,17 +481,21 @@ namespace Dynamo.DSEngine
         }
 
 
-        private void LoadLibraryMigrations(string library)
+        internal void LoadLibraryMigrations(string library)
         {
             string fullLibraryName = library;
 
+            // If library is not found, that doesn't mean there is no migration file.
+            // E.g. built in nodes don't have assembly, but they do have migration file.
             if (!pathManager.ResolveLibraryPath(ref fullLibraryName))
-                return;
+            {
+                fullLibraryName = library;
+            }
 
             string migrationsXMLFile = Path.Combine(Path.GetDirectoryName(fullLibraryName),
                 Path.GetFileNameWithoutExtension(fullLibraryName) + ".Migrations.xml");
 
-            if (!File.Exists(migrationsXMLFile))
+            if (!pathManager.ResolveDocumentPath(ref migrationsXMLFile))
                 return;
 
             var foundPriorNameHints = new Dictionary<string, UpgradeHint>();
@@ -605,13 +651,13 @@ namespace Dynamo.DSEngine
                                                 .procedureTable
                                                 .procList
                                                 .Where(p =>
-                    !p.name.StartsWith(Constants.kInternalNamePrefix) &&
-                    !p.name.Equals("Break"));
+                    !p.Name.StartsWith(Constants.kInternalNamePrefix) &&
+                    !p.Name.Equals("Break"));
 
             IEnumerable<FunctionDescriptor> functions = from method in builtins
                                                         let arguments =
-                                                            method.argInfoList.Zip(
-                                                                method.argTypeList,
+                                                            method.ArgumentInfos.Zip(
+                                                                method.ArgumentTypes,
                                                                 (arg, argType) =>
                                                                     new TypedParameter(
                                                                     arg.Name,
@@ -623,17 +669,20 @@ namespace Dynamo.DSEngine
                                                         select
                                                             new FunctionDescriptor(new FunctionDescriptorParams
                                                             {
-                                                                FunctionName = method.name,
+                                                                FunctionName = method.Name,
                                                                 Summary = description,
                                                                 Parameters = arguments,
                                                                 PathManager = pathManager,
-                                                                ReturnType = method.returntype,
+                                                                ReturnType = method.ReturnType,
                                                                 FunctionType = FunctionType.GenericFunction,
                                                                 IsVisibleInLibrary = visibleInLibrary,
-                                                                IsBuiltIn = true
+                                                                IsBuiltIn = true,
+                                                                IsPackageMember = false,
+                                                                Assembly = "BuiltIn"
                                                             });
 
             AddBuiltinFunctions(functions);
+            LoadLibraryMigrations("BuiltIn");
         }
 
         private static IEnumerable<TypedParameter> GetBinaryFuncArgs()
@@ -670,7 +719,9 @@ namespace Dynamo.DSEngine
                     Parameters = args,
                     PathManager = pathManager,
                     FunctionType = FunctionType.GenericFunction,
-                    IsBuiltIn = true
+                    IsBuiltIn = true,
+                    IsPackageMember = false,
+                    Assembly = "Operators"
                 }))
                 .Concat(new FunctionDescriptor(new FunctionDescriptorParams
                 {
@@ -678,7 +729,9 @@ namespace Dynamo.DSEngine
                     Parameters = GetUnaryFuncArgs(),
                     PathManager = pathManager,
                     FunctionType = FunctionType.GenericFunction,
-                    IsBuiltIn = true
+                    IsBuiltIn = true,
+                    IsPackageMember = false,
+                    Assembly = "Operators"
                 }).AsSingleton());
 
             AddBuiltinFunctions(functions);
@@ -737,8 +790,8 @@ namespace Dynamo.DSEngine
 
         private void ImportProcedure(string library, ProcedureNode proc)
         {
-            string procName = proc.name;
-            if (proc.isAutoGeneratedThisProc ||
+            string procName = proc.Name;
+            if (proc.IsAutoGeneratedThisProc ||
                 CoreUtils.IsSetter(procName) ||
                 CoreUtils.IsDisposeMethod(procName) ||
                 CoreUtils.StartsWithDoubleUnderscores(procName))
@@ -747,7 +800,7 @@ namespace Dynamo.DSEngine
             }
 
             string obsoleteMessage = "";
-            int classScope = proc.classScope;
+            int classScope = proc.ClassID;
             string className = string.Empty;
             MethodAttributes methodAttribute = proc.MethodAttribute;
             ClassAttributes classAttribute = null;
@@ -757,7 +810,7 @@ namespace Dynamo.DSEngine
                 var classNode = LibraryManagementCore.ClassTable.ClassNodes[classScope];
 
                 classAttribute = classNode.ClassAttributes;
-                className = classNode.name;
+                className = classNode.Name;
             }
 
             // MethodAttribute's HiddenInLibrary has higher priority than
@@ -785,7 +838,7 @@ namespace Dynamo.DSEngine
             {
                 if (CoreUtils.IsGetter(procName))
                 {
-                    type = proc.isStatic
+                    type = proc.IsStatic
                         ? FunctionType.StaticProperty
                         : FunctionType.InstanceProperty;
 
@@ -795,17 +848,17 @@ namespace Dynamo.DSEngine
                 }
                 else
                 {
-                    if (proc.isConstructor)
+                    if (proc.IsConstructor)
                         type = FunctionType.Constructor;
-                    else if (proc.isStatic)
+                    else if (proc.IsStatic)
                         type = FunctionType.StaticMethod;
                     else
                         type = FunctionType.InstanceMethod;
                 }
             }
 
-            List<TypedParameter> arguments = proc.argInfoList.Zip(
-                proc.argTypeList,
+            List<TypedParameter> arguments = proc.ArgumentInfos.Zip(
+                proc.ArgumentTypes,
                 (arg, argType) =>
                 {
                     AssociativeNode defaultArgumentNode;
@@ -820,8 +873,14 @@ namespace Dynamo.DSEngine
                             defaultArgumentNode = binaryExpr.RightNode;
                         }
                     }
-
-                    return new TypedParameter(arg.Name, argType, defaultArgumentNode);
+                    string shortName = null;
+                    if (defaultArgumentNode != null)
+                    {
+                        shortName = defaultArgumentNode.ToString();
+                        var rewriter = new ElementRewriter(LibraryManagementCore.ClassTable, LibraryManagementCore.BuildStatus.LogSymbolConflictWarning);
+                        defaultArgumentNode = defaultArgumentNode.Accept(rewriter);
+                    }
+                    return new TypedParameter(arg.Name, argType, defaultArgumentNode, shortName);
                 }).ToList();
 
             IEnumerable<string> returnKeys = null;
@@ -839,15 +898,16 @@ namespace Dynamo.DSEngine
                 ClassName = className,
                 FunctionName = procName,
                 Parameters = arguments,
-                ReturnType = proc.returntype,
+                ReturnType = proc.ReturnType,
                 FunctionType = type,
                 IsVisibleInLibrary = isVisible,
                 ReturnKeys = returnKeys,
                 PathManager = pathManager,
-                IsVarArg = proc.isVarArg,
+                IsVarArg = proc.IsVarArg,
                 ObsoleteMsg = obsoleteMessage,
                 CanUpdatePeriodically = canUpdatePeriodically,
-                IsBuiltIn = pathManager.PreloadedLibraries.Contains(library)
+                IsBuiltIn = pathManager.PreloadedLibraries.Contains(library),
+                IsPackageMember = packagedLibraries.Contains(library)
             });
 
             AddImportedFunctions(library, new[] { function });
@@ -855,12 +915,21 @@ namespace Dynamo.DSEngine
 
         private void ImportClass(string library, ClassNode classNode)
         {
-            foreach (ProcedureNode proc in classNode.vtable.procList)
+            foreach (ProcedureNode proc in classNode.ProcTable.procList)
                 ImportProcedure(library, proc);
         }
 
         private void OnLibraryLoading(LibraryLoadingEventArgs e)
         {
+            string library = e.LibraryPath;
+
+            // Assembly, that is located in package directory, considered as part of package.
+            if (pathManager.PackagesDirectories.Any(
+                directory => library.StartsWith(directory)))
+            {
+                packagedLibraries.Add(library);
+            }
+
             EventHandler<LibraryLoadingEventArgs> handler = LibraryLoading;
             if (handler != null)
                 handler(this, e);

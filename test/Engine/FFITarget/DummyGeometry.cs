@@ -6,6 +6,28 @@ using System.Text;
 
 namespace FFITarget
 {
+    public class DummyPoint2D : IDisposable
+    {
+        public double X { get; set; }
+        public double Y { get; set; }
+
+        public static DummyPoint2D ByCoordinates(double x, double y)
+        {
+            DummyPoint2D ret = new DummyPoint2D()
+                {
+                    X = x,
+                    Y = y,
+                };
+
+            return ret;
+        }
+
+        public void Dispose()
+        {
+            //Don't do anything
+        }
+    }
+
     public class DummyPoint : IDisposable
     {
         public double X { get; set; }
@@ -91,6 +113,18 @@ namespace FFITarget
             return ret;
         }
 
+        public static DummyVector ByVector(DummyVector rhs)
+        {
+            DummyVector ret = new DummyVector()
+            {
+                X = rhs.X,
+                Y = rhs.Y,
+                Z = rhs.Z
+            };
+
+            return ret;
+        }
+
         public DummyVector Scale(double value)
         {
             return DummyVector.ByCoordinates(X * value, Y * value, Z * value);
@@ -123,12 +157,52 @@ namespace FFITarget
             return ByStartPointEndPoint(p1, p2);
         }
 
+        // Deprecated function for testing
+        // This function is replaced with a function with one additional parameter which has 
+        // default argument. During load time, any saved node created with this function
+        // will be replaced by the other function but will UsingDefaultArgument enabled
+        //public static DummyLine ByVector(
+        //    [DefaultArgumentAttribute("DummyVector.ByCoordinates(0,0,1)")] DummyVector v)
+        //{
+        //    DummyLine ln = new DummyLine();
+        //    ln.Start = DummyPoint.ByCoordinates(0, 0, 0);
+        //    ln.End = DummyPoint.ByCoordinates(v.X, v.Y, v.Z);
+        //    return ln;
+        //}
+
+        public static DummyLine ByVector(
+            [DefaultArgumentAttribute("DummyVector.ByCoordinates(0,0,1)")] DummyVector v,
+            double length = 10)
+        {
+            DummyLine ln = new DummyLine();
+            ln.Start = DummyPoint.ByCoordinates(0, 0, 0);
+            ln.End = DummyPoint.ByCoordinates(v.X*length, v.Y*length, v.Z*length);
+            return ln;
+        }
+
+        // Another deprecated function for testing default argument
+        //public static DummyLine ByPoint(DummyPoint p)
+        //{
+        //    DummyLine ln = new DummyLine();
+        //    ln.Start = DummyPoint.ByCoordinates(0, 0, 0);
+        //    ln.End = p;
+        //    return ln;
+        //}
+
+        public static DummyLine ByPoint(DummyPoint p,
+            [DefaultArgumentAttribute("DummyVector.ByCoordinates(1,2,3)")] DummyVector v)
+        {
+            DummyLine ln = new DummyLine();
+            ln.Start = p;
+            ln.End = DummyPoint.ByCoordinates(p.X + v.X, p.Y + v.Y, p.Z + v.Z);
+            return ln;
+        }
+
         public void Dispose()
         {
             //Don't do anything
         }
         
     }
-
 
 }

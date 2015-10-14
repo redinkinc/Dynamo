@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Linq;
 using System.Xml;
 using Autodesk.DesignScript.Runtime;
+using Dynamo.Migration;
 using Dynamo.Models;
 using Dynamo.Utilities;
 
-namespace DSCoreNodesUI
+namespace Dynamo.Nodes
 {
     [NodeName("Legacy Node")]
     [NodeDescription("DummyNodeDescription",typeof(Dynamo.Properties.Resources))]
@@ -21,7 +23,7 @@ namespace DSCoreNodesUI
 
         public DummyNode()
         {
-            LegacyNodeName = "DSCoreNodesUI.DummyNode";
+            LegacyNodeName = "Dynamo.Nodes.DummyNode";
             LegacyAssembly = string.Empty;
             NodeNature = Nature.Unresolved;
             Description = GetDescription();
@@ -48,6 +50,10 @@ namespace DSCoreNodesUI
             var helper = new XmlElementHelper(originalElement);
             X = helper.ReadDouble("x", 0.0);
             Y = helper.ReadDouble("y", 0.0);
+
+            //Take the GUID from the old node (dummy nodes should have their
+            //GUID's. This will allow the Groups to work as expected. MAGN-7568)
+            GUID = helper.ReadGuid("guid", this.GUID);
         }
 
         private void LoadNode(XmlNode nodeElement)

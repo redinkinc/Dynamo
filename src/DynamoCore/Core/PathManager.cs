@@ -7,7 +7,9 @@ using System.Reflection;
 using Dynamo.Interfaces;
 using System.Globalization;
 using Dynamo.Models;
+using Dynamo.Properties;
 using Dynamo.UI;
+using DynamoUtilities;
 
 namespace Dynamo.Core
 {
@@ -46,6 +48,8 @@ namespace Dynamo.Core
         public const string PackagesDirectoryName = "packages";
         public const string LogsDirectoryName = "Logs";
         public const string NodesDirectoryName = "nodes";
+        public const string ExtensionsDirectoryName = "extensions";
+        public const string ViewExtensionsDirectoryName = "viewExtensions";
         public const string DefinitionsDirectoryName = "definitions";
         public const string BackupDirectoryName = "backup";
         public const string PreferenceSettingsFileName = "DynamoSettings.xml";
@@ -57,15 +61,16 @@ namespace Dynamo.Core
         private readonly string userDataDir;
         private readonly string commonDataDir;
 
-        private readonly string userDefinitions;
         private readonly string commonDefinitions;
         private readonly string logDirectory;
-        private readonly string packagesDirectory;
+        private readonly string extensionsDirectory;
+        private readonly string viewExtensionsDirectory;
         private readonly string samplesDirectory;
         private readonly string backupDirectory;
         private readonly string preferenceFilePath;
         private readonly string galleryFilePath;
 
+        private readonly List<string> rootDirectories;
         private readonly HashSet<string> nodeDirectories;
         private readonly HashSet<string> additionalResolutionPaths;
         private readonly HashSet<string> preloadedLibraries;
@@ -73,6 +78,11 @@ namespace Dynamo.Core
         #endregion
 
         #region IPathManager Interface Implementation
+
+        public string DynamoCoreDirectory
+        {
+            get { return dynamoCoreDir; }
+        }
 
         public string UserDataDirectory
         {
@@ -84,9 +94,14 @@ namespace Dynamo.Core
             get { return commonDataDir; }
         }
 
-        public string UserDefinitions
+        public string DefaultUserDefinitions
         {
-            get { return userDefinitions; }
+            get { return TransformPath(rootDirectories[0], DefinitionsDirectoryName); }
+        }
+
+        public IEnumerable<string> DefinitionDirectories
+        {
+            get { return rootDirectories.Select(path => TransformPath(path, DefinitionsDirectoryName)); }
         }
 
         public string CommonDefinitions
@@ -99,9 +114,24 @@ namespace Dynamo.Core
             get { return logDirectory; }
         }
 
-        public string PackagesDirectory
+        public string DefaultPackagesDirectory
         {
-            get { return packagesDirectory; }
+            get { return TransformPath(rootDirectories[0], PackagesDirectoryName); }
+        }
+
+        public IEnumerable<string> PackagesDirectories
+        {
+            get { return rootDirectories.Select(path => TransformPath(path, PackagesDirectoryName)); }
+        }
+
+        public string ExtensionsDirectory
+        {
+            get { return extensionsDirectory; }
+        }
+
+        public string ViewExtensionsDirectory
+        {
+            get { return viewExtensionsDirectory; }
         }
 
         public string SamplesDirectory
@@ -152,7 +182,10 @@ namespace Dynamo.Core
             if (!additionalResolutionPaths.Contains(path))
             {
                 if (!Directory.Exists(path))
-                    throw new DirectoryNotFoundException(path);
+                {
+                    throw new Exception(String.Format(Resources.NoBinFolder, path));
+                }
+                  
 
                 additionalResolutionPaths.Add(path);
             }
@@ -245,6 +278,9 @@ namespace Dynamo.Core
                     "TestServices.dll.config.");
             }
 
+            extensionsDirectory = Path.Combine(dynamoCoreDir, ExtensionsDirectoryName);
+            viewExtensionsDirectory = Path.Combine(dynamoCoreDir, ViewExtensionsDirectoryName);
+
             // If both major/minor versions are zero, get from assembly.
             majorFileVersion = pathManagerParams.MajorFileVersion;
             minorFileVersion = pathManagerParams.MinorFileVersion;
@@ -258,9 +294,7 @@ namespace Dynamo.Core
             // Current user specific directories.
             userDataDir = GetUserDataFolder(pathResolver);
 
-            userDefinitions = Path.Combine(userDataDir, DefinitionsDirectoryName);
             logDirectory = Path.Combine(userDataDir, LogsDirectoryName);
-            packagesDirectory = Path.Combine(userDataDir, PackagesDirectoryName);
             preferenceFilePath = Path.Combine(userDataDir, PreferenceSettingsFileName);
             backupDirectory = Path.Combine(Directory.GetParent(userDataDir).FullName, BackupDirectoryName);
 
@@ -271,6 +305,8 @@ namespace Dynamo.Core
             samplesDirectory = GetSamplesFolder(commonDataDir);
             var galleryDirectory = GetGalleryDirectory(commonDataDir);
             galleryFilePath = Path.Combine(galleryDirectory, GalleryContentsFileName);
+
+            rootDirectories = new List<string> { userDataDir };
 
             nodeDirectories = new HashSet<string>
             {
@@ -287,18 +323,33 @@ namespace Dynamo.Core
         /// is referring to. This method call throws exception if any creation 
         /// fails.
         /// </summary>
-        internal void EnsureDirectoryExistence()
+        /// <param name="exceptions">The output list of exception, if any of 
+        /// the target directories cannot be created during this call.</param>
+        internal void EnsureDirectoryExistence(List<Exception> exceptions)
         {
+            if (rootDirectories.Count <= 0)
+            {
+                throw new InvalidOperationException(
+                    "At least one custom package directory must be specified");
+            }
+
+            if (exceptions == null)
+                throw new ArgumentNullException("exceptions");
+
+            exceptions.Clear();
+
             // User specific data folders.
-            CreateFolderIfNotExist(userDataDir);
-            CreateFolderIfNotExist(userDefinitions);
-            CreateFolderIfNotExist(logDirectory);
-            CreateFolderIfNotExist(packagesDirectory);
-            CreateFolderIfNotExist(backupDirectory);
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(userDataDir));
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(DefaultUserDefinitions));
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(logDirectory));
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(DefaultPackagesDirectory));
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(backupDirectory));
 
             // Common data folders for all users.
-            CreateFolderIfNotExist(commonDataDir);
-            CreateFolderIfNotExist(commonDefinitions);
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(commonDataDir));
+            exceptions.Add(PathHelper.CreateFolderIfNotExist(commonDefinitions));
+
+            exceptions.RemoveAll(x => x == null); // Remove all null entries.
         }
 
         /// <summary>
@@ -326,6 +377,12 @@ namespace Dynamo.Core
             }
 
             return Path.Combine(BackupDirectory, fileName);
+        }
+
+        internal void LoadCustomPackageFolders(IEnumerable<string> folders)
+        {
+            rootDirectories.Clear();
+            rootDirectories.AddRange(folders);
         }
 
         #endregion
@@ -362,7 +419,7 @@ namespace Dynamo.Core
             }
         }
 
-        private string GetUserDataFolder(IPathResolver pathResolver)
+        internal string GetUserDataFolder(IPathResolver pathResolver = null)
         {
             if (pathResolver != null && !string.IsNullOrEmpty(pathResolver.UserDataRootFolder))
                 return GetDynamoDataFolder(pathResolver.UserDataRootFolder);
@@ -386,10 +443,24 @@ namespace Dynamo.Core
                 String.Format("{0}.{1}", majorFileVersion, minorFileVersion));
         }
 
-        private static void CreateFolderIfNotExist(string folderPath)
+        // This method is used to get the locations of packages folder or custom
+        // nodes folder given the root path. This is necessary because the packages
+        // may be in the root folder or in a packages subfolder of the root folder.
+        private string TransformPath(string root, string extension)
         {
-            if (!Directory.Exists(folderPath))
-                Directory.CreateDirectory(folderPath);
+            if (root.StartsWith(GetUserDataFolder()))
+                return Path.Combine(root, extension);
+            try
+            {
+                var subFolder = Path.Combine(root, extension);
+                if (Directory.Exists(subFolder))
+                    return subFolder;
+            }
+            catch (IOException) { }
+            catch (ArgumentException) { }
+            catch (UnauthorizedAccessException) { }
+
+            return root;
         }
 
         private static string GetSamplesFolder(string dataRootDirectory)
@@ -419,18 +490,17 @@ namespace Dynamo.Core
             var uiCulture = CultureInfo.CurrentUICulture.ToString();
             var galleryDirectory = Path.Combine(commonDataDir, "gallery", uiCulture);
 
-            // If the localized samples directory does not exist then fall back 
-            // to using the en-US samples folder. Do an additional check to see 
+            // If the localized gallery directory does not exist then fall back 
+            // to using the en-US gallery folder. Do an additional check to see 
             // if the localized folder is available but is empty.
             // 
             var di = new DirectoryInfo(galleryDirectory);
             if (!Directory.Exists(galleryDirectory) ||
-                !di.GetDirectories().Any() ||
-                !di.GetFiles().Any())
+                !di.GetFiles("*.xml",SearchOption.TopDirectoryOnly).Any())
             {
-                var neturalCommonSamples = Path.Combine(commonDataDir, "gallery", "en-US");
-                if (Directory.Exists(neturalCommonSamples))
-                    galleryDirectory = neturalCommonSamples;
+                var neutralCommonGallery = Path.Combine(commonDataDir, "gallery", "en-US");
+                if (Directory.Exists(neutralCommonGallery))
+                    galleryDirectory = neutralCommonGallery;
             }
 
             return galleryDirectory;

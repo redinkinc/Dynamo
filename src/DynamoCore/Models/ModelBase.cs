@@ -5,11 +5,13 @@ using Dynamo.Core;
 using Dynamo.Interfaces;
 using Dynamo.Selection;
 using Dynamo.Utilities;
+using Dynamo.Logging;
+
 using ProtoCore.Namespace;
 
 namespace Dynamo.Models
 {
-    public enum SaveContext { File, Copy, Undo };
+    public enum SaveContext { File, Copy, Undo, Preset };
 
     /// <summary>
     /// This class encapsulates the input parameters that need to be passed into nodes
@@ -230,7 +232,7 @@ namespace Dynamo.Models
         /// <param name="recorder"></param>
         /// <returns>Returns true if the call has been handled, or false otherwise.
         /// </returns>
-        public bool HandleModelEvent(string eventName, UndoRedoRecorder recorder)
+        internal bool HandleModelEvent(string eventName, UndoRedoRecorder recorder)
         {
             return HandleModelEventCore(eventName, recorder);
         }
@@ -252,7 +254,7 @@ namespace Dynamo.Models
             return false; // Base class does not handle this.
         }
 
-        protected virtual bool HandleModelEventCore(string eventName, UndoRedoRecorder recorder)
+        internal virtual bool HandleModelEventCore(string eventName, UndoRedoRecorder recorder)
         {
             return false; // Base class does not handle this.
         }

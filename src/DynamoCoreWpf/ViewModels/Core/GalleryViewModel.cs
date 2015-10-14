@@ -79,17 +79,17 @@ namespace Dynamo.Wpf.ViewModels.Core
             var galleryFilePath = pathManager.GalleryFilePath;
             var galleryDirectory = Path.GetDirectoryName(galleryFilePath);
 
+            var version = dynamoViewModel.Model.UpdateManager.ProductVersion;
+
             DynamoVersion = string.Format(Properties.Resources.GalleryDynamoVersion,
-                            pathManager.MajorFileVersion,
-                            pathManager.MinorFileVersion);
+                            version.FileMajor, 
+                            version.FileMinor, 
+                            version.FileBuild);
 
             contents = GalleryContents.Load(galleryFilePath).GalleryUiContents;
 
             //Set image path relative to gallery Directory
-            foreach (GalleryContent content in contents)
-            {
-                content.ImagePath = Path.Combine(galleryDirectory, content.ImagePath);
-            }
+            SetImagePath(galleryDirectory);
 
             currentContent = contents.FirstOrDefault();
             if (currentContent != null) //if contents is not empty
@@ -101,6 +101,31 @@ namespace Dynamo.Wpf.ViewModels.Core
             MoveNextCommand = new DelegateCommand(p => MoveIndex(true), o => contents.Count > 1);
             MovePrevCommand = new DelegateCommand(p => MoveIndex(false), o => contents.Count > 1);
             CloseGalleryCommand = new DelegateCommand(p => dvm.CloseGalleryCommand.Execute(null), o => true);
+        }
+
+        /// <summary>
+        /// Set image path relative to the gallery directory. The method looks for the 
+        /// images alongside GalleryContents.xml. If a given image cannot be found, it 
+        /// searches under "Data" directory in the parent directory.
+        /// </summary>
+        /// <param name="galleryDirectory">
+        /// The directory in which the GalleryContents.xml resides
+        /// </param>
+        private void SetImagePath(string galleryDirectory)
+        {
+            foreach (GalleryContent content in contents)
+            {
+                var imagePath = Path.Combine(galleryDirectory, content.ImagePath);
+                if (File.Exists(imagePath))
+                {
+                    content.ImagePath = imagePath;
+                }
+                else
+                {
+                    content.ImagePath = Path.GetFullPath(Path.Combine(galleryDirectory, 
+                                                        @"..\Data", content.ImagePath));
+                }
+            }
         }
 
         /// <summary>

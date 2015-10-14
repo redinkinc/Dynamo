@@ -2,6 +2,7 @@
 using Dynamo.Models;
 using Dynamo.Selection;
 using Dynamo.UI.Commands;
+using Dynamo.Utilities;
 using Dynamo.Wpf.Properties;
 
 namespace Dynamo.ViewModels
@@ -25,10 +26,22 @@ namespace Dynamo.ViewModels
         private DelegateCommand _unpauseVisualizationManagerUpdateCommand;
         private DelegateCommand _showHideAllGeometryPreviewCommand;
         private DelegateCommand _showHideAllUpstreamPreviewCommand;
+        private DelegateCommand _showInCanvasSearchCommand;
+        private DelegateCommand _pasteCommand;
 
         #endregion
 
         #region Public Delegate Commands
+
+        public DelegateCommand CopyCommand
+        {
+            get { return DynamoViewModel.CopyCommand; }
+        }
+
+        public DelegateCommand PasteCommand
+        {
+            get { return _pasteCommand ?? (_pasteCommand = new DelegateCommand(Paste, DynamoViewModel.CanPaste)); }
+        }
 
         public DelegateCommand SelectAllCommand
         {
@@ -162,28 +175,6 @@ namespace Dynamo.ViewModels
             }
         }
 
-        public DelegateCommand PauseVisualizationManagerCommand
-        {
-            get
-            {
-                if (_pauseVisualizationManagerUpdateCommand == null)
-                    _pauseVisualizationManagerUpdateCommand = new DelegateCommand(PauseVisualizationManagerUpdates, CanPauseVisualizationManagerUpdates);
-
-                return _pauseVisualizationManagerUpdateCommand;
-            }
-        }
-
-        public DelegateCommand UnPauseVisualizationManagerCommand
-        {
-            get
-            {
-                if (_unpauseVisualizationManagerUpdateCommand == null)
-                    _unpauseVisualizationManagerUpdateCommand = new DelegateCommand(UnPauseVisualizationManagerUpdates, CanUnPauseVisualizationManagerUpdates);
-
-                return _unpauseVisualizationManagerUpdateCommand;
-            }
-        }
-
         public DelegateCommand ShowHideAllGeometryPreviewCommand
         {
             get
@@ -212,9 +203,35 @@ namespace Dynamo.ViewModels
             }
         }
 
+        public DelegateCommand ShowInCanvasSearchCommand
+        {
+            get
+            {
+                if (_showInCanvasSearchCommand == null)
+                    _showInCanvasSearchCommand = new DelegateCommand(OnRequestShowInCanvasSearch);
+
+                return _showInCanvasSearchCommand;
+            }
+        }
+
         #endregion
 
         #region Properties for Command Data Binding
+
+        public bool CanCopy
+        {
+            get { return DynamoViewModel.CanCopy(null); }
+        }
+
+        public bool CanPaste
+        {
+            get { return DynamoViewModel.CanPaste(null); }
+        }
+
+        public bool CanCopyOrPaste
+        {
+            get { return CanCopy || CanPaste; }
+        }
 
         public bool AnyNodeVisible
         {
@@ -237,6 +254,21 @@ namespace Dynamo.ViewModels
         public bool HasSelection
         {
             get { return DynamoSelection.Instance.Selection.Count > 0; }
+        }
+
+        public bool IsGeometryOperationEnabled
+        {
+            get
+            {
+                if (DynamoSelection.Instance.Selection.Count <= 0)
+                    return false; // No selection.
+
+                // Menu options that are specific to geometry (show/hide all 
+                // geometry previews, upstream previews, etc.) are only enabled
+                // in the home workspace.
+                // 
+                return (this.Model is HomeWorkspaceModel);
+            }
         }
 
         public LacingStrategy SelectionArgumentLacing

@@ -1,22 +1,27 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows.Input;
 using System.Windows.Media;
 using Dynamo.Search.SearchElements;
 using Dynamo.UI;
 using Dynamo.ViewModels;
+
+using FontAwesome.WPF;
+
 using Microsoft.Practices.Prism.Commands;
 using Microsoft.Practices.Prism.ViewModel;
-using System;
 using Dynamo.Models;
-using Dynamo.ViewModels;
 using Dynamo.Search;
+using System.Windows;
 
 namespace Dynamo.Wpf.ViewModels
 {
     public class NodeSearchElementViewModel : NotificationObject, ISearchEntryViewModel
     {
+        private Dictionary<SearchElementGroup, FontAwesomeIcon> FontAwesomeDict;
+
         private bool isSelected;
         private SearchViewModel searchViewModel;
 
@@ -39,33 +44,23 @@ namespace Dynamo.Wpf.ViewModels
             Model = element;
             searchViewModel = svm;
 
-            Model.PropertyChanged += ModelOnPropertyChanged;
+            Model.VisibilityChanged += ModelOnVisibilityChanged;
             if (searchViewModel != null)
                 Clicked += searchViewModel.OnSearchElementClicked;
             ClickedCommand = new DelegateCommand(OnClicked);
+
+            LoadFonts();
+        }
+
+        private void ModelOnVisibilityChanged()
+        {           
+            RaisePropertyChanged("Visibility");
         }
 
         public void Dispose()
         {
             if (searchViewModel != null)
                 Clicked -= searchViewModel.OnSearchElementClicked;
-            Model.PropertyChanged -= ModelOnPropertyChanged;
-        }
-
-        private void ModelOnPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
-        {
-            switch (propertyChangedEventArgs.PropertyName)
-            {
-                case "Name":
-                    RaisePropertyChanged("Name");
-                    break;
-                case "IsVisibleInSearch":
-                    RaisePropertyChanged("Visibility");
-                    break;
-                case "Description":
-                    RaisePropertyChanged("Description");
-                    break;
-            }
         }
 
         public NodeSearchElement Model { get; set; }
@@ -83,6 +78,11 @@ namespace Dynamo.Wpf.ViewModels
         public string Assembly
         {
             get { return Model.Assembly; }
+        }
+
+        public string Parameters
+        {
+            get { return Model.Parameters; }
         }
 
         public bool Visibility
@@ -111,12 +111,66 @@ namespace Dynamo.Wpf.ViewModels
             get { return Model.Description; }
         }
 
+        /// <summary>
+        /// Indicates class from which node came, e.g. Point - class, ByCoordinates - node.
+        /// </summary>
+        public string Class
+        {
+            get
+            {
+                return Model.Categories.Count > 1 ? Model.Categories.Last() : String.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Indicates category from which node came, e.g. Geometry - category, ByCoordinates - node.
+        /// </summary>
+        public string Category
+        {
+            get
+            {
+                return Model.Categories.FirstOrDefault();
+            }
+        }
+
+        /// <summary>
+        /// Indicates node's group. It can be create, action or query. 
+        /// </summary>
+        public SearchElementGroup Group
+        {
+            get
+            {
+                return Model.Group;
+            }
+        }
+
+        /// <summary>
+        /// Loads font awesome icons for node's groups, e.g. create - plus icon.
+        /// </summary>
+        private void LoadFonts()
+        {
+            FontAwesomeDict = new Dictionary<SearchElementGroup, FontAwesomeIcon>();
+
+            FontAwesomeDict.Add(SearchElementGroup.Create, FontAwesomeIcon.Plus);
+            FontAwesomeDict.Add(SearchElementGroup.Action, FontAwesomeIcon.LightningBolt);
+            FontAwesomeDict.Add(SearchElementGroup.Query, FontAwesomeIcon.Question);
+        }
+
+        /// <summary>
+        /// Indicates group icon, e.g. create - plus icon.
+        /// </summary>
+        public FontAwesomeIcon GroupIconName
+        {
+            get
+            {
+                return FontAwesomeDict.ContainsKey(Group) ? FontAwesomeDict[Group] : FontAwesomeIcon.None;
+            }
+        }
+
         public bool HasDescription
         {
             get { return (!Model.Description.Equals(Dynamo.UI.Configurations.NoDescriptionAvailable)); }
         }
-
-        public NodeCategoryViewModel Category { get; set; }
 
         public IEnumerable<Tuple<string, string>> InputParameters
         {
@@ -169,15 +223,19 @@ namespace Dynamo.Wpf.ViewModels
             }
         }
 
+        internal Point Position { get; set; }
+
         public ICommand ClickedCommand { get; private set; }
 
-        public event Action<NodeModel> Clicked;
+        public event Action<NodeModel, Point> Clicked;
         protected virtual void OnClicked()
         {
             if (Clicked != null)
             {
                 var nodeModel = Model.CreateNode();
-                Clicked(nodeModel);
+                Clicked(nodeModel, Position);
+
+                Dynamo.Services.InstrumentationLogger.LogPiiInfo("Search-NodeAdded", FullName);
             }
         }
 
@@ -224,7 +282,6 @@ namespace Dynamo.Wpf.ViewModels
         public CustomNodeSearchElementViewModel(CustomNodeSearchElement element, SearchViewModel svm)
             : base(element, svm)
         {
-            Model.PropertyChanged += ModelOnPropertyChanged;
             Path = Model.Path;
         }
 
@@ -237,12 +294,6 @@ namespace Dynamo.Wpf.ViewModels
                 path = value;
                 RaisePropertyChanged("Path");
             }
-        }
-
-        private void ModelOnPropertyChanged(object sender, PropertyChangedEventArgs propertyChangedEventArgs)
-        {
-            if (propertyChangedEventArgs.PropertyName == "Path")
-                RaisePropertyChanged("Path");
         }
 
         public new CustomNodeSearchElement Model
@@ -261,11 +312,22 @@ namespace Dynamo.Wpf.ViewModels
 
         protected override ImageSource GetIcon(string fullNameOfIcon)
         {
+            IconRequestEventArgs iconRequest;
+
+            // If there is no path, that means it's just created node.
+            // Use DefaultAssembly to load icon.
+            if (String.IsNullOrEmpty(Path))
+            {
+                iconRequest = new IconRequestEventArgs(Configurations.DefaultAssembly, fullNameOfIcon);
+                OnRequestBitmapSource(iconRequest);
+                return iconRequest.Icon;
+            }
+
             string customizationPath = System.IO.Path.GetDirectoryName(Path);
             customizationPath = System.IO.Directory.GetParent(customizationPath).FullName;
             customizationPath = System.IO.Path.Combine(customizationPath, "bin", "Package.dll");
 
-            var iconRequest = new IconRequestEventArgs(customizationPath, fullNameOfIcon, false);
+            iconRequest = new IconRequestEventArgs(customizationPath, fullNameOfIcon, false);
             OnRequestBitmapSource(iconRequest);
 
             if (iconRequest.Icon != null)

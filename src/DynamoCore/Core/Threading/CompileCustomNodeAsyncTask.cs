@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using Dynamo.DSEngine;
+using Dynamo.Engine;
 using Dynamo.Models;
 
 using ProtoCore.AST.AssociativeAST;
@@ -24,7 +24,7 @@ namespace Dynamo.Core.Threading
         private GraphSyncData graphSyncData;
         private EngineController engineController;
 
-        internal override TaskPriority Priority
+        public override TaskPriority Priority
         {
             get { return TaskPriority.AboveNormal; }
         }

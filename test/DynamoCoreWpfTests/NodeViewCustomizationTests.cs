@@ -68,8 +68,8 @@ namespace DynamoCoreWpfTests
             Open(@"UI\CoreUINodes.dyn");
 
             var nodeView = NodeViewWithGuid("6869c998-b819-4686-8849-6f36162c4182"); // NodeViewOf<Watch3D>();
-            var watchView = nodeView.ChildrenOfType<Watch3DView>().First();
-            Assert.Null(watchView.Points);
+            var watchView = nodeView.ChildrenOfType<Watch3DView>().FirstOrDefault();
+            Assert.NotNull(watchView);
         }
 
         [Test]
@@ -200,8 +200,8 @@ namespace DynamoCoreWpfTests
             var eles = nodeView.inputGrid.ChildrenOfType<DynamoNodeButton>();
             Assert.AreEqual(2, eles.Count());
 
-            var inPortGrid = nodeView.inPortGrid;
-            Assert.AreEqual(3, inPortGrid.ChildrenOfType<TextBlock>().Count());
+            var inputPortControl = nodeView.inputPortControl;
+            Assert.AreEqual(3, inputPortControl.ChildrenOfType<TextBlock>().Count());
         }
 
         [Test]
@@ -214,8 +214,8 @@ namespace DynamoCoreWpfTests
             var eles = nodeView.inputGrid.ChildrenOfType<DynamoNodeButton>();
             Assert.AreEqual(2, eles.Count());
 
-            var inPortGrid = nodeView.inPortGrid;
-            Assert.AreEqual(4, inPortGrid.ChildrenOfType<TextBlock>().Count());
+            var inputPortControl = nodeView.inputPortControl;
+            Assert.AreEqual(4, inputPortControl.ChildrenOfType<TextBlock>().Count());
         }
 
         [Test]
@@ -264,23 +264,6 @@ namespace DynamoCoreWpfTests
             Assert.Greater(img.ActualHeight, 10);
         }
 
-        [Test, Category("Failure")]
-        public void Watch3DContainsExpectedGeometry()
-        {
-            OpenAndRun(@"UI\WatchUINodes.dyn");
-
-            var nodeView = NodeViewWithGuid("6edc4c28-15ef-4d60-af6d-6ed829871973");
-                // NodeViewOf<Dynamo.Nodes.Watch3D>();
-
-            var watch3ds = nodeView.ChildrenOfType<Watch3DView>();
-
-            Assert.AreEqual(1, watch3ds.Count());
-
-            var watch3DView = watch3ds.First();
-
-            Assert.AreEqual(1, watch3DView.Points.Positions.Count);
-        }
-
         [Test]
         public void CustomNodeIsCustomized()
         {
@@ -302,24 +285,24 @@ namespace DynamoCoreWpfTests
             var eles = nodeView.inputGrid.ChildrenOfType<DynamoNodeButton>();
             Assert.AreEqual(2, eles.Count());
 
-            var inPortGrid = nodeView.inPortGrid;
-            Assert.AreEqual(3, inPortGrid.ChildrenOfType<TextBlock>().Count());
+            var inputPortControl = nodeView.inputPortControl;
+            Assert.AreEqual(3, inputPortControl.ChildrenOfType<TextBlock>().Count());
 
             nodeView = NodeViewWithGuid("2f031397-539e-4df4-bfca-d94d0bd02bc1"); // String.Concat node
 
             eles = nodeView.inputGrid.ChildrenOfType<DynamoNodeButton>();
             Assert.AreEqual(2, eles.Count());
 
-            inPortGrid = nodeView.inPortGrid;
-            Assert.AreEqual(2, inPortGrid.ChildrenOfType<TextBlock>().Count());
+            inputPortControl = nodeView.inputPortControl;
+            Assert.AreEqual(2, inputPortControl.ChildrenOfType<TextBlock>().Count());
 
             nodeView = NodeViewWithGuid("0cb04cce-1b05-47e0-a73f-ee81af4b7f43"); // List.Join node
 
             eles = nodeView.inputGrid.ChildrenOfType<DynamoNodeButton>();
             Assert.AreEqual(2, eles.Count());
 
-            inPortGrid = nodeView.inPortGrid;
-            Assert.AreEqual(2, inPortGrid.ChildrenOfType<TextBlock>().Count());
+            inputPortControl = nodeView.inputPortControl;
+            Assert.AreEqual(2, inputPortControl.ChildrenOfType<TextBlock>().Count());
         }
 
         [Test]
@@ -341,6 +324,7 @@ namespace DynamoCoreWpfTests
             Assert.IsNotNull(image.Source);
         }
 
+        [Test]
         public void InvalidInputShouldNotCrashColorRangeNode()
         {
             Open(@"UI\ColorRangeInvalidInputCrash.dyn");
@@ -352,6 +336,36 @@ namespace DynamoCoreWpfTests
             var guid = System.Guid.Parse("c1d3a92a-e4d4-47a8-8533-bf19e63e0bf9");
             Model.ExecuteCommand(new DynamoModel.UpdateModelValueCommand(
                 Model.CurrentWorkspace.Guid, guid, "Code", "5.6"));
+        }
+
+        [Test]
+        public void ArrayExprShouldNotCrashColorRangeNode()
+        {
+            var guid = System.Guid.Parse("c90f5c20-8c63-4708-bd1a-289647bae471");
+
+            OpenAndRun(@"UI\ArrayExprShouldNotCrashColorRangeNode.dyn");
+            var nodes = Model.CurrentWorkspace.Nodes.Where(n => n.GUID == guid);
+            var node = nodes.ElementAt(0) as CodeBlockNodeModel;
+            node.OnNodeModified(); // Mark node as dirty to tigger an immediate run.
+
+            Assert.Pass(); // We should reach here safely without exception.
+        }
+
+        [Test]
+        public void InvalidValueShouldNotCrashColorRangeNode()
+        {
+            var guid0 = System.Guid.Parse("1a245b04-ad9e-4b9c-8301-730afbd4e6fc");
+            var guid1 = System.Guid.Parse("cece298a-22de-4f4a-a323-fdb04af406a4");
+
+            OpenAndRun(@"UI\InvalidValueShouldNotCrashColorRangeNode.dyn");
+            var nodes0 = Model.CurrentWorkspace.Nodes.Where(n => n.GUID == guid0);
+            var nodes1 = Model.CurrentWorkspace.Nodes.Where(n => n.GUID == guid0);
+            var node0 = nodes0.ElementAt(0) as CodeBlockNodeModel;
+            var node1 = nodes0.ElementAt(0) as CodeBlockNodeModel;
+            node0.OnNodeModified(); // Mark node as dirty to tigger an immediate run.
+            node1.OnNodeModified(); // Mark node as dirty to tigger an immediate run.
+
+            Assert.Pass(); // We should reach here safely without exception.
         }
     }
 }

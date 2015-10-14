@@ -14,7 +14,7 @@ using Dynamo.Tests;
 using Dynamo.UpdateManager;
 using Dynamo.ViewModels;
 using Dynamo.Wpf.ViewModels.Core;
-
+using Dynamo.Wpf.ViewModels.Watch3D;
 using DynamoShapeManager;
 
 using NUnit.Framework;
@@ -100,7 +100,7 @@ namespace SystemTestServices
             //not having changes.
             ViewModel.HomeSpace.HasUnsavedChanges = false;
 
-            if (View.IsLoaded)
+            if (null != View && View.IsLoaded)
                 View.Close();
 
             if (ViewModel != null)
@@ -185,7 +185,8 @@ namespace SystemTestServices
                     StartInTestMode = true,
                     PathResolver = pathResolver,
                     GeometryFactoryPath = preloader.GeometryFactoryPath,
-                    UpdateManager = this.UpdateManager
+                    UpdateManager = this.UpdateManager,
+                    ProcessMode = Dynamo.Core.Threading.TaskProcessMode.Synchronous
                 });
 
             ViewModel = DynamoViewModel.Start(
@@ -240,7 +241,7 @@ namespace SystemTestServices
         {
             var nodes = ViewModel.Model.CurrentWorkspace.Nodes;
 
-            double dummyNodesCount = nodes.OfType<DSCoreNodesUI.DummyNode>().Count();
+            double dummyNodesCount = nodes.OfType<Dynamo.Nodes.DummyNode>().Count();
             if (dummyNodesCount >= 1)
             {
                 Assert.Fail("Number of dummy nodes found in Sample: " + dummyNodesCount);
@@ -397,7 +398,7 @@ namespace SystemTestServices
             return objects;
         }
 
-        private string GetVarName(string guid)
+        protected string GetVarName(string guid)
         {
             var model = ViewModel.Model;
             var node = model.CurrentWorkspace.NodeFromWorkspace(guid);
@@ -405,7 +406,7 @@ namespace SystemTestServices
             return node.AstIdentifierBase;
         }
 
-        private RuntimeMirror GetRuntimeMirror(string varName)
+        protected RuntimeMirror GetRuntimeMirror(string varName)
         {
             RuntimeMirror mirror = null;
             Assert.DoesNotThrow(() => mirror = ViewModel.Model.EngineController.GetMirror(varName));

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-
+using Dynamo.Interfaces;
 using Dynamo.Models;
 using Dynamo.Selection;
 using Dynamo.Tests;
@@ -41,10 +41,10 @@ namespace Dynamo
                 preloader = null;
                 DynamoSelection.Instance.ClearSelection();
 
-                if (this.CurrentDynamoModel != null)
+                if (CurrentDynamoModel != null)
                 {
-                    this.CurrentDynamoModel.ShutDown(false);
-                    this.CurrentDynamoModel = null;
+                    CurrentDynamoModel.ShutDown(false);
+                    CurrentDynamoModel = null;
                 }
             }
             catch (Exception ex)
@@ -55,7 +55,7 @@ namespace Dynamo
             base.Cleanup();
         }
 
-        protected virtual void StartDynamo()
+        protected virtual void StartDynamo(IPreferences settings = null)
         {
             var assemblyPath = Assembly.GetExecutingAssembly().Location;
             preloader = new Preloader(Path.GetDirectoryName(assemblyPath));
@@ -84,13 +84,25 @@ namespace Dynamo
                 }
             }
 
-            this.CurrentDynamoModel = DynamoModel.Start(
-                new DynamoModel.DefaultStartConfiguration()
-                {
-                    PathResolver = pathResolver,
-                    StartInTestMode = true,
-                    GeometryFactoryPath = preloader.GeometryFactoryPath
-                });
+            this.CurrentDynamoModel = DynamoModel.Start(CreateStartConfiguration(settings));
+        }
+
+        /// <summary>
+        /// Derived test classes could override it to provide different 
+        /// configuration.
+        /// </summary>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        protected virtual DynamoModel.IStartConfiguration CreateStartConfiguration(IPreferences settings)
+        {
+            return new DynamoModel.DefaultStartConfiguration()
+            {
+                PathResolver = pathResolver,
+                StartInTestMode = true,
+                GeometryFactoryPath = preloader.GeometryFactoryPath,
+                Preferences = settings,
+                ProcessMode = Core.Threading.TaskProcessMode.Synchronous
+            };
         }
 
         protected T Open<T>(params string[] relativePathParts) where T : WorkspaceModel

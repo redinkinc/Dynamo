@@ -6,7 +6,6 @@ namespace ProtoCore.DSASM
     {
         kExpressionInterpreter,
         kNormal,
-        kModes
     }
 
     namespace CallingConvention
@@ -15,7 +14,6 @@ namespace ProtoCore.DSASM
         {
             kExplicit,  // Explicit bounce is using the same executive for the bounce target
             kImplicit,  // Implicit bounce is using a new executive for the bounce target
-            kNumTypes
         }
 
         public enum CallType
@@ -23,7 +21,6 @@ namespace ProtoCore.DSASM
             kExplicit,      // Explicit call is using the same executive for the function call
             kExplicitBase,  // Explicit call to the base class
             kImplicit,      // Implicit call is using a new executive for the function call
-            kNumTypes
         }
     }
 
@@ -380,7 +377,6 @@ namespace ProtoCore.DSASM
         public const int kPartialFrameData = 4;
         public const int kDefaultClassRank = 99;
         public const int nDimensionArrayRank = -1;
-        public const int kDotArgCount = 2;
         public const int kDotCallArgCount = 6;
         public const int kDotArgIndexPtr = 0;
         public const int kDotArgIndexDynTableIndex = 1;
@@ -388,13 +384,10 @@ namespace ProtoCore.DSASM
         public const int kDotArgIndexDimCount = 3;
         public const int kDotArgIndexArrayArgs = 4;
         public const int kDotArgIndexArgCount = 5;
-        public const int kThisFunctionAdditionalArgs = 1;
 
         // This is being moved to Core.Options as this needs to be overridden for the Watch test framework runner
         //public const int kDynamicCycleThreshold = 2000;
         public const int kRecursionTheshold = 1000;
-        //public const int kRepetationTheshold = 1000;
-        public const int kExressionInterpreterStackSize = 1;
  
         public const string termline = ";\n";
         public const string kInternalNamePrefix = "%";
@@ -408,26 +401,19 @@ namespace ProtoCore.DSASM
         public const string kTempArg = "%targ";
         public const string kTempVar = "%tvar";
         public const string kTempPropertyVar = "%tvar_property";
-        public const string kTempExceptionVar = "%texp";
         public const string kTempLangBlock = "%tempLangBlock";
         public const string kForLoopExpression = "%forloop_expr_";
         public const string kForLoopKey = "%forloop_key_";
-        public const string kStartOfAutogenForloopIteration = "%autogen_forloop_iteration_";
-        public const string kStartOfAutogenForloopCount = "%autogen_forloop_count_";
         public const string kFunctionPointerCall = "%FunctionPointerCall";
         public const string kFunctionRangeExpression = "%generate_range";
         public const string kDotMethodName = "%dot";
         public const string kDotArgMethodName = "%dotarg";
         public const string kInlineConditionalMethodName = "%inlineconditional";
-        public const string kInlineCondition = "%InlineCondition";
         public const string kGetTypeMethodName = "%get_type";
         public const string kNodeAstFailed = "%nodeAstFailed";
         public const string kWatchResultVar = "watch_result_var";
         public const string kSSATempPrefix = "%tSSA_";
-        public const string kGlobalInstanceNamePrefix = "%globalInstanceFunction_";
-        public const string kGlobalInstanceFunctionPrefix = "%proc";
         public const string kThisPointerArgName = "%thisPtrArg";
-        public const string kMangledFunctionPlaceholderName = "%Placeholder";
         public const string kTempModifierStateNamePrefix = "%tmp_modifierState_";
         public const string kTempProcConstant = "temp_proc_var_";
         public const string kTempProcLeftVar = "%" + kTempProcConstant;

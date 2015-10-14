@@ -162,20 +162,20 @@
   <data name="ComposeFunctionPortDataResultToolTip" xml:space="preserve">
     <value>Composed function: g(f(x))</value>
   </data>
-  <data name="NumberRangePortDataAmountToolTip" xml:space="preserve">
+  <data name="RangePortDataAmountToolTip" xml:space="preserve">
     <value>Amount of numbers in the sequence</value>
   </data>
-  <data name="NumberRangePortDataEndToolTip" xml:space="preserve">
-    <value>Number to end the sequence at</value>
+  <data name="RangePortDataEndToolTip" xml:space="preserve">
+    <value>Number or letter to end the sequence at</value>
   </data>
-  <data name="NumberRangePortDataSeqToolTip" xml:space="preserve">
+  <data name="RangePortDataSeqToolTip" xml:space="preserve">
     <value>New sequence</value>
   </data>
-  <data name="NumberRangePortDataStartToolTip" xml:space="preserve">
-    <value>Number to start the sequence at</value>
+  <data name="RangePortDataStartToolTip" xml:space="preserve">
+    <value>Number or letter to start the sequence at</value>
   </data>
-  <data name="NumberRangePortDataStepToolTip" xml:space="preserve">
-    <value>Space between numbers</value>
+  <data name="RangePortDataStepToolTip" xml:space="preserve">
+    <value>Space between numbers or letters</value>
   </data>
   <data name="PortDataParameterToolTip" xml:space="preserve">
     <value>parameter</value>
@@ -286,7 +286,7 @@ Sorry about that.</value>
     <value>Loading node definition for "{0}" from: {1}</value>
   </data>
   <data name="NodeProblemEncountered" xml:space="preserve">
-    <value>Whilst preparing to run, this node encountered a problem. Please talk to the creators of the node, and give them this message:\n\n{0}</value>
+    <value>Whilst preparing to run, this node encountered a problem. Please talk to the creators of the node, and give them this message:</value>
   </data>
   <data name="OpeningHomeWorkspace" xml:space="preserve">
     <value>Opening home workspace {0}...</value>
@@ -519,7 +519,12 @@ value: bool = false</value>
     <value>Instance of a Custom Node</value>
   </data>
   <data name="SymbolNodeDescription" xml:space="preserve">
-    <value>A function parameter, use with custom nodes. \n\nYou can specify the type and default value for parameter. E.g.,\n\ninput : var[]..[]\nvalue : bool = false</value>
+    <value>A function parameter, use with custom nodes.
+
+You can specify the type and default value for parameter. E.g.,
+
+input : var[]..[]
+value : bool = false</value>
   </data>
   <data name="CustomNodeNotLoaded" xml:space="preserve">
     <value>Custom node definition is not loaded!</value>
@@ -582,7 +587,7 @@ value: bool = false</value>
     <value>Nothing is selected.</value>
   </data>
   <data name="SearchTextBlockText" xml:space="preserve">
-    <value>SEARCH LIBRARY</value>
+    <value>Search</value>
   </data>
   <data name="WatermarkLabelText" xml:space="preserve">
     <value>Your code goes here</value>
@@ -601,5 +606,34 @@ value: bool = false</value>
   <data name="SymbolSearchTags" xml:space="preserve">
     <value>variable;argument;parameter</value>
     <comment>Search tags for Symbol/Input node. During translation, localized keywords can be appended to the end of these tags to provide localized search terms in addition to the existing ones.</comment>
+  </data>
+  <data name="DefaultCustomNodeCategory" xml:space="preserve">
+    <value>Custom nodes</value>
+    <comment>Used for uncategorised custom nodes.</comment>
+  </data>
+  <data name="InvalidCustomNodeFolderWarning" xml:space="preserve">
+    <value>The folder '{0}' does not exist</value>
+    <comment>This warning message is shown (during start up) when user specifies additional folders in DynamoSettings.xml file but the folders do not exist.</comment>
+  </data>
+  <data name="CodeBlockSearchTags" xml:space="preserve">
+    <value>codeblock;</value>
+  </data>
+  <data name="NoBinFolder" xml:space="preserve">
+    <value>{0} contains a package without a bin folder.  Ignoring it.</value>
+  </data>
+  <data name="CustomNodeFolderLoadFailure" xml:space="preserve">
+    <value>Failed to load custom node directory. Do you have permission to access {0}?</value>
+  </data>
+  <data name="PortsNameDescriptionDoNotEqualWarningMessage" xml:space="preserve">
+    <value>Number of port names does not equal number of port descriptions.</value>
+  </data>
+  <data name="DescriptionResource1" xml:space="preserve">
+    <value>some description</value>
+  </data>
+  <data name="ResourcePropertyIsNotStringTypeMessage" xml:space="preserve">
+    <value>Resource Property is not String Type</value>
+  </data>
+  <data name="ResourceTypeDoesNotHavePropertyMessage" xml:space="preserve">
+    <value>Resource Type does not have Property</value>
   </data>
 </root>

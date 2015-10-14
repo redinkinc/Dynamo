@@ -3,7 +3,7 @@ using System.Xml;
 
 using Dynamo;
 using Dynamo.Core;
-using Dynamo.DSEngine;
+using Dynamo.Engine;
 using Dynamo.Search;
 using Dynamo.Search.SearchElements;
 using Dynamo.ViewModels;
@@ -83,7 +83,7 @@ namespace DynamoCoreWpfTests
         [Category("UnitTests")]
         public void DumpLibraryToXmlZeroTouchTest()
         {
-            var searchViewModel = new SearchViewModel(null, new NodeSearchModel());
+            var searchViewModel = new SearchViewModel(new NodeSearchModel());
 
             LibraryLoaded = false;
 

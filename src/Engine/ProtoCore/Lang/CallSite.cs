@@ -652,9 +652,9 @@ namespace ProtoCore
         /// <param name="core"></param>
         /// <param name="arguments"></param>
         /// <returns></returns>
-        private StackValue ReportFunctionGroupNotFound(RuntimeCore runtimeCore)
+        private StackValue ReportFunctionGroupNotFound(RuntimeCore runtimeCore, List<StackValue> arguments)
         {
-            runtimeCore.RuntimeStatus.LogFunctionGroupNotFoundWarning(methodName);
+            runtimeCore.RuntimeStatus.LogFunctionGroupNotFoundWarning(methodName, classScope, arguments);
             return StackValue.Null;
         }
 
@@ -1096,7 +1096,7 @@ namespace ProtoCore
                 }
                 else
                 {
-                    clist.AddRange(runtimeCore.DSExecutable.classTable.ClassNodes[cidx].baseList);
+                    clist.AddRange(runtimeCore.DSExecutable.classTable.ClassNodes[cidx].Bases);
                     ++i;
                 }
             }
@@ -1127,12 +1127,12 @@ namespace ProtoCore
 
             //Walk the class tree structure to find the method
 
-            while (runtimeCore.DSExecutable.classTable.ClassNodes[typeID].baseList.Count > 0)
+            while (runtimeCore.DSExecutable.classTable.ClassNodes[typeID].Bases.Count > 0)
             {
-                Validity.Assert(runtimeCore.DSExecutable.classTable.ClassNodes[typeID].baseList.Count == 1,
+                Validity.Assert(runtimeCore.DSExecutable.classTable.ClassNodes[typeID].Bases.Count == 1,
                                 "Multiple inheritence not yet supported {B93D8D7F-AB4D-4412-8483-33DE739C0ADA}");
 
-                typeID = runtimeCore.DSExecutable.classTable.ClassNodes[typeID].baseList[0];
+                typeID = runtimeCore.DSExecutable.classTable.ClassNodes[typeID].Bases[0];
 
                 foreach (FunctionEndPoint fep in feps)
                     if (fep.ClassOwnerIndex == typeID)
@@ -1177,17 +1177,16 @@ namespace ProtoCore
                 return feps[indeciesOfSmallest[0]];
 
 
-            if (!CoreUtils.IsInternalMethod(feps[0].procedureNode.name) || CoreUtils.IsGetterSetter(feps[0].procedureNode.name))
+            if (!CoreUtils.IsInternalMethod(feps[0].procedureNode.Name) || CoreUtils.IsGetterSetter(feps[0].procedureNode.Name))
             {
                 //If this has failed, we have multiple feps, which can't be distiquished by class hiearchy. Emit a warning and select one
                 StringBuilder possibleFuncs = new StringBuilder();
-                possibleFuncs.Append(
-                    "Couldn't decide which function to execute. Please provide more specific type information. Possible functions were: ");
+                possibleFuncs.Append(Resources.MultipleFunctionsFound);
                 foreach (FunctionEndPoint fep in feps)
                     possibleFuncs.AppendLine("\t" + fep.ToString());
 
 
-                possibleFuncs.AppendLine("Error code: {DCE486C0-0975-49F9-BE2C-2E7D8CCD17DD}");
+                possibleFuncs.AppendLine(string.Format(Resources.ErrorCode, "{DCE486C0-0975-49F9-BE2C-2E7D8CCD17DD}"));
 
                 runtimeCore.RuntimeStatus.LogWarning(WarningID.kAmbiguousMethodDispatch, possibleFuncs.ToString());
             }
@@ -1286,8 +1285,8 @@ namespace ProtoCore
 
                 if ((stackFrame.ThisPtr.IsPointer &&
                      stackFrame.ThisPtr.opdata == -1 && fep.procedureNode != null
-                     && !fep.procedureNode.isConstructor) && !fep.procedureNode.isStatic
-                    && (fep.procedureNode.classScope != -1))
+                     && !fep.procedureNode.IsConstructor) && !fep.procedureNode.IsStatic
+                    && (fep.procedureNode.ClassID != -1))
                 {
                     continue;
                 }
@@ -1448,7 +1447,7 @@ namespace ProtoCore
                 if (runtimeCore.Options.DumpFunctionResolverLogic)
                     runtimeCore.DSExecutable.EventSink.PrintMessage(log.ToString());
 
-                return ReportFunctionGroupNotFound(runtimeCore);
+                return ReportFunctionGroupNotFound(runtimeCore, arguments);
             }
 
 
@@ -1507,8 +1506,9 @@ namespace ProtoCore
                 return ReportMethodNotFoundForArguments(runtimeCore, arguments);
             }
 
+            arguments.ForEach(x => runtimeCore.AddCallSiteGCRoot(CallSiteID, x));
             StackValue ret = Execute(resolvesFeps, context, arguments, replicationInstructions, stackFrame, runtimeCore, funcGroup);
-
+            runtimeCore.RemoveCallSiteGCRoot(CallSiteID);
             return ret;
         }
 
@@ -1654,7 +1654,7 @@ namespace ProtoCore
                         break;
 
                     default:
-                        throw new ReplicationCaseNotCurrentlySupported("Selected algorithm not supported");
+                        throw new ReplicationCaseNotCurrentlySupported(Resources.AlgorithmNotSupported);
                 }
 
 
@@ -1665,7 +1665,7 @@ namespace ProtoCore
                     StackValue[] subParameters = null;
                     if (formalParameters[repIndex].IsArray)
                     {
-                        subParameters = ArrayUtils.GetValues(formalParameters[repIndex], runtimeCore).ToArray();
+                        subParameters = runtimeCore.Heap.ToHeapObject<DSArray>(formalParameters[repIndex]).Values.ToArray();
                     }
                     else
                     {
@@ -1763,13 +1763,13 @@ namespace ProtoCore
                     retSVs[i] = ExecWithRISlowPath(functionEndPoint, c, newFormalParams, newRIs, stackFrame, runtimeCore,
                                                     funcGroup, lastExecTrace, cleanRetTrace);
 
-
+                    runtimeCore.AddCallSiteGCRoot(CallSiteID, retSVs[i]);
 
                     retTrace.NestedData[i] = cleanRetTrace;
 
                 }
 
-                StackValue ret = runtimeCore.RuntimeMemory.Heap.AllocateArray(retSVs, null);
+                StackValue ret = runtimeCore.RuntimeMemory.Heap.AllocateArray(retSVs);
                 return ret;
             }
             else
@@ -1790,7 +1790,8 @@ namespace ProtoCore
                 
                 if (formalParameters[cartIndex].IsArray)
                 {
-                    parameters = ArrayUtils.GetValues(formalParameters[cartIndex], runtimeCore).ToArray();
+                    DSArray array = runtimeCore.Heap.ToHeapObject<DSArray>(formalParameters[cartIndex]);
+                    parameters = array.Values.ToArray();
                     retSize = parameters.Length;
                 }
                 else
@@ -1877,12 +1878,13 @@ namespace ProtoCore
                     retSVs[i] = ExecWithRISlowPath(functionEndPoint, c, newFormalParams, newRIs, stackFrame, runtimeCore,
                                                     funcGroup, lastExecTrace, cleanRetTrace);
 
-
+                    runtimeCore.AddCallSiteGCRoot(CallSiteID, retSVs[i]);
 
                     retTrace.NestedData[i] = cleanRetTrace;
                 }
 
-                StackValue ret = runtimeCore.RuntimeMemory.Heap.AllocateArray(retSVs, null);
+
+                StackValue ret = runtimeCore.RuntimeMemory.Heap.AllocateArray(retSVs);
                 return ret;
 
             }
@@ -1908,8 +1910,8 @@ namespace ProtoCore
 
             if (functionEndPoint == null)
             {
-                runtimeCore.RuntimeStatus.LogWarning(WarningID.kMethodResolutionFailure,
-                                              "Function dispatch could not be completed {2EB39E1B-557C-4819-94D8-CF7C9F933E8A}");
+                runtimeCore.RuntimeStatus.LogWarning(WarningID.kMethodResolutionFailure, 
+                    string.Format(Resources.FunctionDispatchFailed, "{2EB39E1B-557C-4819-94D8-CF7C9F933E8A}"));
                 return StackValue.Null;
             }
 
@@ -2050,7 +2052,7 @@ namespace ProtoCore
                 
                 for (int p = 0; p < promotionsRequired; p++)
                 {
-                    StackValue newSV = runtimeCore.RuntimeMemory.Heap.AllocateArray(new StackValue[1] { oldSv }, null);
+                    StackValue newSV = runtimeCore.RuntimeMemory.Heap.AllocateArray(new StackValue[1] { oldSv });
                     oldSv = newSV;
                 }
 
@@ -2066,7 +2068,7 @@ namespace ProtoCore
                             "Proc Node was null.... {976C039E-6FE4-4482-80BA-31850E708E79}");
 
             //Now cast ret into the return type
-            Type retType = procNode.returntype;
+            Type retType = procNode.ReturnType;
 
             if (retType.UID == (int) PrimitiveType.kTypeVar)
             {
@@ -2076,7 +2078,7 @@ namespace ProtoCore
                 }
                 else
                 {
-                    StackValue coercedRet = TypeSystem.Coerce(ret, procNode.returntype, runtimeCore);
+                    StackValue coercedRet = TypeSystem.Coerce(ret, procNode.ReturnType, runtimeCore);
                     return coercedRet;
                 }
             }
@@ -2097,7 +2099,7 @@ namespace ProtoCore
                 return ret;
             }
 
-            if (ret.IsArray && procNode.returntype.IsIndexable)
+            if (ret.IsArray && procNode.ReturnType.IsIndexable)
             {
                 StackValue coercedRet = TypeSystem.Coerce(ret, retType, runtimeCore);
                 return coercedRet;

@@ -9,7 +9,8 @@ using Microsoft.Office.Interop.Excel;
 using DynamoServices;
 using Autodesk.DesignScript.Runtime;
 using ProtoCore.DSASM;
-using ProtoCore.Properties;
+using Dynamo.Models;
+using Dynamo.Nodes;
 
 namespace DSOffice
 {
@@ -23,7 +24,7 @@ namespace DSOffice
         public bool SaveWorkbooks { get; private set; }
     }
 
-    internal static class ExcelInterop 
+    internal static class ExcelInterop
     {
         private static Microsoft.Office.Interop.Excel.Application _app;
         public static Microsoft.Office.Interop.Excel.Application App
@@ -34,7 +35,7 @@ namespace DSOffice
                 {
                     _app = RegisterAndGetApp();
                 }
-                if (_showOnStartup) 
+                if (_showOnStartup)
                     _app.Visible = true;
 
                 return _app;
@@ -55,7 +56,7 @@ namespace DSOffice
             // get excel, throw exception if it is not
             var officeType = Type.GetTypeFromProgID("Excel.Application");
             if (officeType == null)
-                throw new Exception("Excel is not installed.");
+                throw new Exception(Properties.Resources.ExcelNotInstalled);
 
             try
             {
@@ -68,7 +69,7 @@ namespace DSOffice
 
                 if (!e.ToString().Contains("0x800401E3"))
                 {
-                    throw new Exception("Error setting up communication with Excel.  Try closing any open Excel instances.");
+                    throw new Exception(Properties.Resources.ExcelCommunicationError);
                 }
             }
             catch (Exception)
@@ -142,7 +143,7 @@ namespace DSOffice
 
         internal static void OnProcessExit(object sender, EventArgs eventArgs)
         {
-            if(eventArgs != null)
+            if (eventArgs != null)
             {
                 var args = eventArgs as ExcelCloseEventArgs;
                 if (args != null)
@@ -219,7 +220,7 @@ namespace DSOffice
         /// <returns></returns>
         [IsVisibleInDynamoLibrary(false)]
         public static WorkSheet WriteDataToExcelWorksheet(
-            WorkSheet worksheet, int startRow=0, int startColumn=0, object[][] data=null)
+            WorkSheet worksheet, int startRow = 0, int startColumn = 0, object[][] data = null)
         {
             if (data == null)
                 return worksheet;
@@ -269,16 +270,20 @@ namespace DSOffice
         /// </summary>
         /// <param name="file">File representing the Microsoft Excel spreadsheet.</param>
         /// <param name="sheetName">Name of the worksheet containing the data.</param>
+        /// <param name="readAsStrings">toggle to switch between reading Excel file as strings only or not</param>
         /// <returns name="data">Rows of data from the Excel worksheet.</returns>
-        /// <search>office,excel,spreadsheet</search>
-        public static object[][] ReadFromFile(FileInfo file, string sheetName)
+        /// <search>office,excel,spreadsheet,ifequalreturnindex</search>
+        public static object[][] ReadFromFile(FileInfo file, string sheetName, bool readAsStrings = false)
         {
             WorkBook wb = WorkBook.ReadExcelFile(file.FullName);
             WorkSheet ws = wb.GetWorksheetByName(sheetName);
+            if (readAsStrings)
+                return ws.GetData(true);
+
             return ws.Data;
         }
 
-        [Obsolete("Use File.FromPath -> Excel.ReadFromFile node instead.")]
+        [NodeObsolete("ReadObsolete", typeof(Properties.Resources))]
         public static object[][] Read(string filePath, string sheetName)
         {
             return ReadFromFile(new FileInfo(filePath), sheetName);
@@ -288,8 +293,8 @@ namespace DSOffice
         ///     Write data to a Microsoft Excel spreadsheet. Data is written by row
         ///     with sublists to be written in successive rows. Rows and columns are
         ///     zero-indexed; for example, the value in the data list at [0,0] will
-        ///     be written to cell A1. This node requires Microsoft Excel to be
-        ///     installed.
+        ///     be written to cell A1. Null values and empty lists are written to Excel 
+        ///     as empty cells. This node requires Microsoft Excel to be installed. 
         /// </summary>
         /// <param name="filePath">File path to the Microsoft Excel spreadsheet.</param>
         /// <param name="sheetName">Name of the workseet to write data to.</param>
@@ -298,12 +303,13 @@ namespace DSOffice
         ///     Start column for writing data. Enter 0 for col 1, 1 for column 2, ect.
         /// </param>
         /// <param name="data">Data to write to the spreadsheet.</param>
+        /// <param name="overWrite"></param>
         /// <returns name="data">Data written to the spreadsheet.</returns>
         /// <search>office,excel,spreadsheet</search>
-        public static object[][] WriteToFile(string filePath, string sheetName, int startRow, int startCol, object[][] data)
+        public static object[][] WriteToFile(string filePath, string sheetName, int startRow, int startCol, object[][] data, bool overWrite = false)
         {
             WorkBook wb = new WorkBook(filePath);
-            WorkSheet ws = new WorkSheet (wb, sheetName);
+            WorkSheet ws = new WorkSheet(wb, sheetName, overWrite);
             ws = ws.WriteData(startRow, startCol, data);
             return ws.Data;
         }
@@ -314,7 +320,7 @@ namespace DSOffice
     {
         #region Helper methods
 
-        private static object[][] ConvertToJaggedArray(object[,] input)
+        private static object[][] ConvertToJaggedArray(object[,] input, bool convertToString = false)
         {
             int rows = input.GetUpperBound(0);
             int cols = input.GetUpperBound(1);
@@ -327,7 +333,15 @@ namespace DSOffice
 
                 for (int j = 0; j < cols; j++)
                 {
-                    output[i][j] = input[i + 1, j + 1];
+                    if (convertToString)
+                    {
+                        if (input[i + 1, j + 1] == null)
+                            output[i][j] = null;
+                        else
+                            output[i][j] = input[i + 1, j + 1].ToString();
+                    }
+                    else
+                        output[i][j] = input[i + 1, j + 1];
                 }
             }
 
@@ -339,15 +353,23 @@ namespace DSOffice
             if (input == null)
             {
                 rows = cols = 1;
-                return new object[,]{{""}};
+                return new object[,] { { "" } };
             }
 
             rows = input.GetUpperBound(0) + 1;
             cols = 0;
             for (int i = 0; i < rows; i++)
             {
-                if(input[i] != null)
+                if (input[i] != null)
                     cols = Math.Max(cols, input[i].GetUpperBound(0) + 1);
+            }
+
+            // if the input data is an empty list or a list of nested empty lists
+            // return an empty cell
+            if(rows == 0 || cols == 0)
+            {
+                rows = cols = 1;
+                return new object[,] { { "" } };
             }
 
             object[,] output = new object[rows, cols];
@@ -380,9 +402,9 @@ namespace DSOffice
                         }
                         else if (item is StackValue)
                         {
-                            if (((StackValue) item).IsPointer)
+                            if (((StackValue)item).IsPointer)
                             {
-                                string message = string.Format(Resources.kMethodResolutionFailureWithTypes, 
+                                string message = string.Format(Properties.Resources.kMethodResolutionFailureWithTypes,
                                     "Excel.WriteToFile", "_SingleFunctionObject");
                                 LogWarningMessageEvents.OnLogWarningMessage(message);
                                 return null;
@@ -395,7 +417,7 @@ namespace DSOffice
                             output[i, j] = item.ToString();
                         }
                     }
-                        
+
                 }
             }
 
@@ -406,25 +428,30 @@ namespace DSOffice
         /// <summary>
         /// return data from given worksheet (GetDataFromExcelWorksheet node)
         /// </summary>
-        internal object[][] Data 
-        { 
+        internal object[][] Data
+        {
             get
             {
-                var vals = ws.UsedRange.get_Value();
-
-                // if worksheet is empty
-                if (vals == null)
-                    return new object[0][];
-
-                // if worksheet contains a single value
-                if (!vals.GetType().IsArray)
-                    return new object[][] { new object[] { vals } };
-
-                return ConvertToJaggedArray((object[,])vals);
+                return GetData();
             }
-        }  
+        }
 
-        private WorkBook wb = null;        
+        internal object[][] GetData(bool convertToString = false)
+        {
+            var vals = ws.UsedRange.get_Value();
+
+            // if worksheet is empty
+            if (vals == null)
+                return new object[0][];
+
+            // if worksheet contains a single value
+            if (!vals.GetType().IsArray)
+                return new object[][] { new object[] { vals } };
+
+            return ConvertToJaggedArray((object[,])vals, convertToString);
+        }
+
+        private WorkBook wb = null;
         private Worksheet ws = null;
 
         /// <summary>
@@ -432,25 +459,37 @@ namespace DSOffice
         /// </summary>
         /// <param name="wbook"></param>
         /// <param name="sheetName"></param>
-        internal WorkSheet (WorkBook wbook, string sheetName)
+        /// <param name="overWrite"></param>
+        internal WorkSheet(WorkBook wbook, string sheetName, bool overWrite = false)
         {
             wb = wbook;
 
             // Look for an existing worksheet
-            WorkSheet wSheet = wbook.WorkSheets.FirstOrDefault(n => n.ws.Name == sheetName);
+            WorkSheet[] worksheets = wbook.WorkSheets;
+            WorkSheet wSheet = worksheets.FirstOrDefault(n => n.ws.Name == sheetName);
 
-            // If you find one, then use it.
-            if (wSheet != null)
+            if (wSheet == null)
             {
-                ws = wSheet.ws;
-            }
-            // If you don't find one, create one.
-            else
-            {
-                ws = (Worksheet)wb.Add();
+                // If you don't find one, create one.
+                ws = (Worksheet) wb.Add();
                 ws.Name = sheetName;
                 wb.Save();
+                return;
             }
+            
+            // If you find one, then use it.
+            if (overWrite)
+            {
+                // if there is only one worksheet, we need to add one more
+                // before we can delete the first one
+                ws = (Worksheet) wb.Add();
+                wSheet.ws.Delete();
+                ws.Name = sheetName;
+                wb.Save();
+
+            }
+            else
+                ws = wSheet.ws;
         }
 
         internal WorkSheet(Worksheet ws, WorkBook wb)
@@ -458,7 +497,7 @@ namespace DSOffice
             this.ws = ws;
             this.wb = wb;
         }
-          
+
         /// <summary>
         /// instance method, write data to existing worksheet, (WriteDataToExcelWorksheet node)
         /// </summary>
@@ -499,14 +538,14 @@ namespace DSOffice
         /// <summary>
         /// (GetWorksheetsFromExcelWorkbook node)
         /// </summary>
-        internal WorkSheet[] WorkSheets 
+        internal WorkSheet[] WorkSheets
         {
             get
             {
                 return wb.Worksheets.Cast<Worksheet>().Select(n => new WorkSheet(n, this)).ToArray();
             }
-        }    
-   
+        }
+
         private Workbook wb = null;
 
         internal object Add()
@@ -516,15 +555,15 @@ namespace DSOffice
 
         internal void Save()
         {
-            if(!String.IsNullOrEmpty(wb.Path))
+            if (!String.IsNullOrEmpty(wb.Path))
                 wb.Save();
         }
- 
+
         /// <summary>
         /// Creates a new Workbook with filepath and sheet name as input
         /// </summary>
         internal WorkBook(string filePath)
-        {            
+        {
             Name = filePath;
 
             if (!String.IsNullOrEmpty(filePath))
@@ -580,20 +619,20 @@ namespace DSOffice
                     workbook.Close(false);
                 }
                 catch (Exception)
-                {   
+                {
                 }
-                
+
                 wb.SaveAs(filename);
             }
 
         }
-        
+
         private WorkBook(Workbook wb, string filePath)
         {
             this.wb = wb;
             Name = filePath;
         }
-                
+
         /// <summary>
         /// (ReadExcelFile node)
         /// </summary>
@@ -626,7 +665,7 @@ namespace DSOffice
                 throw new ArgumentException("No worksheet matches the given string.", "sheetName");
 
             return new WorkSheet(ws, this);
-        }             
+        }
 
     }
 }

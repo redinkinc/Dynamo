@@ -2,6 +2,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using Dynamo.Wpf.ViewModels;
+using Dynamo.Search;
 
 namespace Dynamo.Controls
 {

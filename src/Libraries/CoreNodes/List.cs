@@ -32,7 +32,7 @@ namespace DSCore
         /// </summary>
         /// <param name="list">List to filter duplicates out of.</param>
         /// <returns name="list">Filtered list.</returns>
-        /// <search>removes,duplicates,remove duplicates,cull duplicates,distinct</search>
+        /// <search>removes,duplicates,remove duplicates,cull duplicates,distinct,listcontains</search>
         public static IList UniqueItems(IList list)
         {
             return list.Cast<object>().Distinct(DistinctComparer.Instance).ToList();
@@ -44,7 +44,7 @@ namespace DSCore
         /// <param name="list">List to search in.</param>
         /// <param name="item">Item to look for.</param>
         /// <returns name="bool">Whether list contains the given item.</returns>
-        /// <search>item,search,in</search>
+        /// <search>item,search,in,listcontains</search>
         public static bool ContainsItem(IList list, object item)
         {
             return list.Contains(item);
@@ -55,7 +55,7 @@ namespace DSCore
         /// </summary>
         /// <param name="list">List to be reversed.</param>
         /// <returns name="list">New list.</returns>
-        /// <search>flip</search>
+        /// <search>flip,listcontains</search>
         public static IList Reverse(IList list)
         {
             return list.Cast<object>().Reverse().ToList();
@@ -223,7 +223,7 @@ namespace DSCore
         /// <param name="list">List to be split.</param>
         /// <returns name="first">First item in the list.</returns>
         /// <returns name="rest">Rest of the list.</returns>
-        /// <search>first,rest,list split</search>
+        /// <search>first,rest,list split,listcontains</search>
         [MultiReturn(new[] { "first", "rest" })]
         public static IDictionary Deconstruct(IList list)
         {
@@ -278,7 +278,8 @@ namespace DSCore
         }
 
         /// <summary>
-        ///     Removes an amount of items from the start of the list.
+        ///     Removes an amount of items from the start of the list. If the amount is a negative value,
+        ///     items are removed from the end of the list.
         /// </summary>
         /// <param name="list">List to remove items from.</param>
         /// <param name="amount">
@@ -300,7 +301,7 @@ namespace DSCore
         ///     Amount to shift indices by. If negative, indices will be shifted to the left.
         /// </param>
         /// <returns name="list">Shifted list.</returns>
-        /// <search>shift,slide,offset</search>
+        /// <search>shift,offset</search>
         public static IList ShiftIndices(IList list, int amount)
         {
             if (amount == 0)
@@ -508,32 +509,44 @@ namespace DSCore
         }
 
         /// <summary>
-        ///     Chop a list into a set of lists each containing the given amount of items.
+        ///     Chop a list into a set of consecutive sublists with the specified lengths. List division begins at the top of the list.
         /// </summary>
-        /// <param name="list">List to chop up.</param>
-        /// <param name="subLength">Length of each new sub-list.</param>
-        /// <returns name="lists">List of lists.</returns>
-        /// <search>sublists,build sublists,slices,partitions,cut</search>
-        public static IList Chop(IList list, int subLength)
+        /// <param name="list">List to chop into sublists</param>
+        /// <param name="lengths">Lengths of consecutive sublists to be created from the input list</param>
+        /// <returns name="lists">Sublists created from the list</returns>
+        /// <search>sublists,build sublists,slices,partitions,cut,listcontains,chop</search>
+        public static IList Chop(IList list, IList lengths)
         {
-            if (list.Count < subLength)
-                return list;
-
             var finalList = new ArrayList();
             var currList = new ArrayList();
             int count = 0;
+            int lengthIndex = 0;
 
-            foreach (object v in list)
+            // If there are not any lengths more than 0,
+            // we return incoming list.
+            if (lengths.Cast<int>().All(x => x <= 0))
             {
-                count++;
-                currList.Add(v);
+                return list;
+            }
 
-                if (count == subLength)
+            foreach (object obj in list)
+            {
+                // If number of items in current list equals length in list of lengths,
+                // we should add current list in final list.
+                // Or if length in list of lengths <= 0, we should process this length and move further.
+                if (count == ((int)lengths[lengthIndex]) || ((int)lengths[lengthIndex] <= 0))
                 {
                     finalList.Add(currList);
                     currList = new ArrayList();
+                    if (lengthIndex < lengths.Count - 1)
+                    {
+                        lengthIndex++;
+                    }
                     count = 0;
                 }
+
+                currList.Add(obj);
+                count++;
             }
 
             if (currList.Count > 0)
@@ -548,7 +561,7 @@ namespace DSCore
         /// <param name="list">A flat list</param>
         /// <param name="subLength">Length of each new sub-list.</param>
         /// <returns name="diagonals">Lists of elements along matrix diagonals.</returns>
-        /// <search>diagonal,right,matrix,get diagonals,diagonal sublists, </search>
+        /// <search>diagonal,right,matrix,get diagonals,diagonal sublists</search>
         public static IList DiagonalRight([ArbitraryDimensionArrayImport] IList list, int subLength)
         {
             object[] flatList;
@@ -760,7 +773,7 @@ namespace DSCore
         /// <param name="item">The item to repeat.</param>
         /// <param name="amount">The number of times to repeat.</param>
         /// <returns name="list">List of repeated items.</returns>
-        /// <search>repeat,repeated,duplicate,list of item,fill list,copies</search>
+        /// <search>repeat,repeated,duplicate,list of item,fill list,copies,listcontains</search>
         public static IList OfRepeatedItem([ArbitraryDimensionArrayImport] object item, int amount)
         {
             return Enumerable.Repeat(item, amount).ToList();

@@ -246,6 +246,123 @@ namespace ProtoFFI
             return ReflectionInfo.Invoke(thisObject, parameters);
         }
 
+        protected object InvokeFunctionPointerNoThrow(ProtoCore.Runtime.Context c, Interpreter dsi, object thisObject, object[] parameters)
+        {
+            object ret = null;
+            StackValue dsRetValue = StackValue.Null;
+            try
+            {
+                FFIObjectMarshler marshaller = Module.GetMarshaller(dsi.runtime.RuntimeCore);
+                ret = InvokeFunctionPointer(thisObject, parameters);
+                //Reduce to singleton if the attribute is specified.
+                ret = ReflectionInfo.ReduceReturnedCollectionToSingleton(ret);
+                dsRetValue = marshaller.Marshal(ret, c, dsi, mReturnType);
+            }
+            catch (DllNotFoundException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogSemanticError(ex.InnerException.Message);
+                }
+                dsi.LogSemanticError(ex.Message);
+            }
+            catch (System.Reflection.TargetException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
+                }
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
+            }
+            catch (System.Reflection.TargetInvocationException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    System.Exception exc = ex.InnerException;
+                    var exception = exc as ArgumentNullException;
+                    if (exception != null)
+                    {
+                        var innerMessage = string.Format(Resources.ArgumentNullException, exception.ParamName);
+                        var msg = string.Format(Resources.OperationFailType2, 
+                            ReflectionInfo.DeclaringType.Name, 
+                            ReflectionInfo.Name, 
+                            innerMessage);
+
+                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, msg);
+                    }
+                    else if (exc is System.ArgumentException)
+                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, ErrorString(exc));
+                    else if (exc is System.NullReferenceException)
+                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ErrorString(null));
+                    else
+                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ErrorString(exc));
+                }
+                else
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ErrorString(ex));
+            }
+            catch (System.Reflection.TargetParameterCountException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
+                }
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
+            }
+            catch (System.MethodAccessException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
+                }
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
+            }
+            catch (System.InvalidOperationException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
+                }
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
+            }
+            catch (System.NotSupportedException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
+                }
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
+            }
+            catch (ArgumentNullException ex)
+            {
+                var innerMessage = string.Format(Resources.ArgumentNullException, ex.ParamName);
+                var msg = string.Format(Resources.OperationFailType2,
+                    ReflectionInfo.DeclaringType.Name,
+                    ReflectionInfo.Name,
+                    innerMessage);
+
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, msg);
+            }
+            catch (System.ArgumentException ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, ErrorString(ex.InnerException));
+                }
+                else
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, ErrorString(ex));
+            }
+            catch (Exception ex)
+            {
+                if (ex.InnerException != null)
+                {
+                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kDefault, ErrorString(ex.InnerException));
+                }
+                dsi.LogWarning(ProtoCore.Runtime.WarningID.kDefault, ErrorString(ex));
+            }
+
+            return dsRetValue;
+        }
+
         private string ErrorString(System.Exception ex)
         {
             if (ex is System.InvalidOperationException)
@@ -253,9 +370,9 @@ namespace ProtoFFI
 
             string msg = (ex == null) ? "" : ex.Message;
             if (string.IsNullOrEmpty(msg) || msg.Contains("operation failed"))
-                return string.Format("{0}.{1} operation failed.", ReflectionInfo.DeclaringType.Name, ReflectionInfo.Name);
+                return string.Format(Resources.OperationFailType1, ReflectionInfo.DeclaringType.Name, ReflectionInfo.Name);
 
-            return string.Format("{0}.{1} operation failed. \n{2}", ReflectionInfo.DeclaringType.Name, ReflectionInfo.Name, msg);
+            return string.Format(Resources.OperationFailType2, ReflectionInfo.DeclaringType.Name, ReflectionInfo.Name, msg);
         }
 
         public override object Execute(ProtoCore.Runtime.Context c, Interpreter dsi)
@@ -304,7 +421,7 @@ namespace ProtoFFI
                         //This is going to cause a cast exception. This is a very frequently called problem, so we want to short-cut the execution
 
                         dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation,
-                            string.Format("Null value cannot be cast to {0}", paraminfos[i].ParameterType.Name));
+                            string.Format(Resources.FailedToCastFromNull, paraminfos[i].ParameterType.Name));
                         
                             return null;
                         //throw new System.InvalidCastException(string.Format("Null value cannot be cast to {0}", paraminfos[i].ParameterType.Name));
@@ -326,97 +443,7 @@ namespace ProtoFFI
                 }
             }
 
-            object ret = null;
-            StackValue dsRetValue = StackValue.Null; 
-            try
-            {
-                ret = InvokeFunctionPointer(thisObject, parameters.Count > 0 ? parameters.ToArray() : null);
-                //Reduce to singleton if the attribute is specified.
-                ret = ReflectionInfo.ReduceReturnedCollectionToSingleton(ret);
-                dsRetValue = marshaller.Marshal(ret, c, dsi, mReturnType);
-            }
-            catch (DllNotFoundException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogSemanticError(ex.InnerException.Message);
-                }
-                dsi.LogSemanticError(ex.Message);
-            }
-            catch (System.Reflection.TargetException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
-                }
-                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
-            }
-            catch (System.Reflection.TargetInvocationException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    System.Exception exc = ex.InnerException;
-                    if (exc is System.ArgumentException)
-                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, ErrorString(exc));
-                    else if (exc is System.NullReferenceException)
-                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ErrorString(null));
-                    else
-                        dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ErrorString(exc));
-                }
-                else
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ErrorString(ex));
-            }
-            catch (System.Reflection.TargetParameterCountException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
-                }
-                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
-            }
-            catch (System.MethodAccessException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
-                }
-                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
-            }
-            catch (System.InvalidOperationException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
-                }
-                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
-            }
-            catch (System.NotSupportedException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.InnerException.Message);
-                }
-                dsi.LogWarning(ProtoCore.Runtime.WarningID.kAccessViolation, ex.Message);
-            }
-            catch (System.ArgumentException ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, ErrorString(ex.InnerException));
-                }
-                else
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kInvalidArguments, ErrorString(ex));
-            }
-            catch (Exception ex)
-            {
-                if (ex.InnerException != null)
-                {
-                    dsi.LogWarning(ProtoCore.Runtime.WarningID.kDefault, ErrorString(ex.InnerException));
-                }
-                dsi.LogWarning(ProtoCore.Runtime.WarningID.kDefault, ErrorString(ex));
-            }
-
-            return dsRetValue;
+            return InvokeFunctionPointerNoThrow(c, dsi, thisObject, parameters.Count > 0 ? parameters.ToArray() : null);
         }
     }
 
@@ -435,6 +462,10 @@ namespace ProtoFFI
             List<StackValue> s = dsi.runtime.rmem.Stack;
             FFIObjectMarshler marshaller = Module.GetMarshaller(dsi.runtime.RuntimeCore);
 
+            var thisObject = marshaller.UnMarshal(s.Last(), c, dsi, ReflectionInfo.DeclaringType);
+            //Notify marshler for dispose.
+            marshaller.OnDispose(s.Last(), c, dsi);
+
             Object retVal = null;
             if (ReflectionInfo.IsWrapperOf(CLRModuleType.DisposeMethod))
             {
@@ -442,7 +473,7 @@ namespace ProtoFFI
                 // Dispose() method in their classes, they will share a same
                 // Dispose() method from CLRModuleType.DisposeMethod. We need
                 // to manually dispose them.
-                var thisObject = marshaller.UnMarshal(s.Last(), c, dsi, typeof(IDisposable));
+
                 if (thisObject != null && thisObject is IDisposable)
                 {
                     var disposable = thisObject as IDisposable;
@@ -451,9 +482,8 @@ namespace ProtoFFI
             }
             else
             {
-                retVal = base.Execute(c, dsi);
+                retVal = InvokeFunctionPointerNoThrow(c, dsi, thisObject, null);
             }
-            marshaller.OnDispose(s.Last(), c, dsi); //Notify marshler for dispose.
 
             return retVal;
         }
@@ -495,11 +525,13 @@ namespace ProtoFFI
                 if (classIndex != ProtoCore.DSASM.Constants.kInvalidIndex)
                 {
                     var runtimeCore = dsi.runtime.RuntimeCore;
-                    int idx = runtimeCore.DSExecutable.classTable.ClassNodes[classIndex].symbols.IndexOf(PropertyName);
-                    StackValue oldValue = dsi.runtime.rmem.Heap.GetHeapElement(thisObject).GetValue(idx, runtimeCore);
+                    int idx = runtimeCore.DSExecutable.classTable.ClassNodes[classIndex].Symbols.IndexOf(PropertyName);
+
+                    var obj = runtimeCore.Heap.ToHeapObject<DSObject>(thisObject);
+                    StackValue oldValue = obj.GetValueFromIndex(idx, runtimeCore);
                     if (!StackUtils.Equals(oldValue, propValue))
                     {
-                        dsi.runtime.rmem.Heap.GetHeapElement(thisObject).SetValue(idx, propValue);
+                        obj.SetValueAtIndex(idx, propValue, runtimeCore);
                     }
                 }
             }

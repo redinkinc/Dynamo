@@ -3,11 +3,12 @@ using System.IO;
 using System.Linq;
 
 using Dynamo.Core;
-using Dynamo.DSEngine;
+using Dynamo.Engine;
 
 using NUnit.Framework;
 using ProtoCore;
 using TestServices;
+using System.Xml;
 
 namespace Dynamo.Tests
 {
@@ -188,6 +189,45 @@ namespace Dynamo.Tests
 
         [Test]
         [Category("UnitTests")]
+        //This test builds a migration for a zero touch node from DynamoCore
+        public void CanReadFileWithZeroTouchMigrationOfFunctionSignatureWithoutParameters()
+        {
+            
+            string libraryPath = "DSCoreNodes.dll";
+            string XmlPath = "DSCoreNodes.Migrations.xml";
+            string migrations = "<?xml version=\"1.0\"?>" + System.Environment.NewLine +
+                "<migrations>" + System.Environment.NewLine +
+                "<priorNameHint>" + System.Environment.NewLine +
+                "<oldName>DSCore.DateTime.Now</oldName>" + System.Environment.NewLine +
+                "<newName>DSCore.DateTime.Never</newName>" + System.Environment.NewLine +
+                "</priorNameHint>" + System.Environment.NewLine +
+                "</migrations>" + System.Environment.NewLine;
+
+
+            string xmlstring =@"<Dynamo.Nodes.DSFunction guid=""f05953f3-6ead-44f7-b872-1e0203c784cc""
+            type=""Dynamo.Nodes.DSFunction"" nickname=""DateTime.Now"" x=""259.5"" y=""260.5"" 
+            isVisible=""true"" isUpstreamVisible=""true"" lacing=""Shortest""
+            isSelectedInput=""False"" assembly=""DSCoreNodes.dll"" function=""DSCore.DateTime.Now"" />";
+
+            XmlDocument doc = new XmlDocument();
+            doc.LoadXml(xmlstring);
+            var xmlElement = doc.DocumentElement;
+
+            string tempXMLPath = Path.Combine(TempFolder, XmlPath);
+            string tempLibraryPath = Path.Combine(TempFolder, libraryPath);
+
+            System.IO.File.WriteAllText(tempXMLPath, migrations);
+            
+            libraryServices.LoadLibraryMigrations(tempLibraryPath);
+            Assert.DoesNotThrow(() => { libraryServices.AddAdditionalAttributesToNode("DSCore.DateTime.Now", xmlElement); });
+            Assert.DoesNotThrow(() => { libraryServices.AddAdditionalElementsToNode("DSCore.DateTime.Now", xmlElement); });
+          
+           
+        }
+
+
+        [Test]
+        [Category("UnitTests")]
         public void MethodWithRefOutParams_NoLoad()
         {
             LibraryLoaded = false;
@@ -214,27 +254,6 @@ namespace Dynamo.Tests
                 string functionName = function.FunctionName;
                 Assert.IsTrue(functionName != "MethodWithRefParameter" && functionName != "MethodWithOutParameter" && functionName != "MethodWithRefOutParameters");
             }
-        }
-
-        [Test]
-        [Category("UnitTests")]
-        public void TestDefaultArgumentAttribute()
-        {
-            string libraryPath = "FFITarget.dll";
-            if (!libraryServices.IsLibraryLoaded(libraryPath))
-            {
-                libraryServices.ImportLibrary(libraryPath);
-            }
-
-            // Get function groups for ClassFunctionality Class
-            var functions = libraryServices.GetFunctionGroups(libraryPath)
-                                            .SelectMany(x => x.Functions)
-                                            .Where(y => y.ClassName.Contains("FFITarget.TestData") && y.FunctionName.Equals("GetCircleArea"));
-
-            Assert.IsTrue(functions.Any());
-            var func = functions.First();
-
-            Assert.IsTrue(func.Parameters.First().DefaultValue.ToString().Equals("TestData.GetFloat()"));
         }
 
         #endregion

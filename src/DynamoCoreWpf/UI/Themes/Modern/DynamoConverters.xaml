@@ -94,6 +94,7 @@
     <controls:NonEmptyStringToCollapsedConverter x:Key="NonEmptyStringToCollapsedConverter" />
     <controls:SearchResultsToVisibilityConverter x:Key="SearchResultsToVisibilityConverter" />
     <controls:EnumToBooleanConverter x:Key="EnumToBoolConverter" />
+    <controls:PackageUploadStateToStringConverter x:Key="PackageUploadStateToStringConverter" />
     <controls:PackageDownloadStateToStringConverter x:Key="PackageDownloadStateToStringConverter" />
     <controls:ShowHideClassicNavigatorMenuItemConverter x:Key="ShowHideClassicNavigatorMenuItemConverter" />
     <controls:PortTypeToMarginConverter x:Key="PortTypeToMarginConverter" />
@@ -146,5 +147,29 @@
     <controls:BooleanToBrushConverter x:Key="DescriptionToColorConverter"
                                       TrueBrush="#cccccc"
                                       FalseBrush="#666666" />
+    <controls:GroupFontSizeToEditorEnabledConverter x:Key="GroupFontSizeToEditorEnabledConverter"/>
     <controls:ElementTypeToShortConverter x:Key="ElementTypeToShortConverter" />
+    <controls:GroupTitleVisibilityConverter x:Key="GroupTitleVisibilityConverter"/>
+    <controls:LibraryViewModeToBoolConverter x:Key="LibraryViewModeToBoolConverter" />
+    <controls:WorkspaceContextMenuHeightConverter x:Key="WorkspaceContextMenuHeightConverter" />
+    <controls:TreeViewLineConverter x:Key="TreeViewLineConverter" />
+    <controls:TreeViewLineMarginConverter x:Key="TreeViewLineMarginConverter" />
+    <controls:TreeViewHLineMarginConverter x:Key="TreeViewHLineMarginConverter" />
+    <controls:TreeViewVLineMarginConverter x:Key="TreeViewVLineMarginConverter" />
+    <controls:TreeViewMarginCheck x:Key="TreeViewMarginCheck"/>   
+    <controls:NestedContentMarginConverter x:Key="NestedContentMarginConverter"/>
+    <controls:ClassViewMarginConverter x:Key="ClassViewMarginConverter" />
+    <controls:ElementGroupToColorConverter x:Key="ElementGroupToColorConverter" />
+    <controls:BooleanToBrushConverter x:Key="FilterIsSelertedCategoryToBrushConverter"
+                                      TrueBrush="{StaticResource CommonSidebarTextColor}"
+                                      FalseBrush="{StaticResource FilterCategoryIsNotSelectedColor}">
+    </controls:BooleanToBrushConverter>
+    <controls:BooleanToBrushConverter x:Key="FilterIconForegroundConverter"
+                                      TrueBrush="{StaticResource FilterIconColor}"
+                                      FalseBrush="{StaticResource LibraryItemHostBackground}">
+    </controls:BooleanToBrushConverter>
+    <controls:BooleanToBrushConverter x:Key="FilterIsSelertedCheckBoxForegroundConverter"
+                                      TrueBrush="White"
+                                      FalseBrush="{StaticResource SearchDarkGreyTextColor}">
+    </controls:BooleanToBrushConverter>
 </ResourceDictionary>

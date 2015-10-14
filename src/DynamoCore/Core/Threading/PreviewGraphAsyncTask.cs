@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-using Dynamo.DSEngine;
+using Dynamo.Engine;
 using Dynamo.Models;
 
 using ProtoScript.Runners;
@@ -23,7 +23,7 @@ namespace Dynamo.Core.Threading
         private bool verboseLogging;
         public List<Guid> previewGraphData;
         
-        internal override TaskPriority Priority
+        public override TaskPriority Priority
         {
             get { return TaskPriority.Normal; }
         }

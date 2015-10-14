@@ -4,13 +4,17 @@ using System.IO;
 using System.Linq;
 using System.Xml;
 using Dynamo.Interfaces;
+using Dynamo.Migration;
 using Dynamo.Models;
 using Dynamo.Nodes;
-using Dynamo.PackageManager;
+using Dynamo.Selection;
 using Dynamo.Utilities;
+using Dynamo.Logging;
 using ProtoCore.AST;
 using ProtoCore.Namespace;
 using Symbol = Dynamo.Nodes.Symbol;
+using Dynamo.Library;
+using Dynamo.Properties;
 
 namespace Dynamo.Core
 {
@@ -19,7 +23,7 @@ namespace Dynamo.Core
     ///     with this type.  This object implements late initialization of custom nodes by providing a 
     ///     single interface to initialize custom nodes.  
     /// </summary>
-    public class CustomNodeManager : LogSourceBase, ICustomNodeSource
+    public class CustomNodeManager : LogSourceBase, ICustomNodeSource, ICustomNodeManager
     {
         public CustomNodeManager(NodeFactory nodeFactory, MigrationManager migrationManager)
         {
@@ -314,14 +318,31 @@ namespace Dynamo.Core
         private IEnumerable<CustomNodeInfo> ScanNodeHeadersInDirectory(string dir, bool isTestMode)
         {
             if (!Directory.Exists(dir))
+            {
+                Log(string.Format(Resources.InvalidCustomNodeFolderWarning, dir));
                 yield break;
+            }
 
-            foreach (var file in Directory.EnumerateFiles(dir, "*.dyf"))
+            // Will throw exception if we don't have write access
+            IEnumerable<string> dyfs;
+            try
+            {
+                dyfs = Directory.EnumerateFiles(dir, "*.dyf");
+            }
+            catch (Exception e)
+            {
+                Log(string.Format(Resources.CustomNodeFolderLoadFailure, dir));
+                Log(e);
+                yield break;
+            }
+
+            foreach (var file in dyfs)
             {
                 CustomNodeInfo info;
                 if (TryGetInfoFromPath(file, isTestMode, out info))
                     yield return info;
             }
+
         }
 
         /// <summary>
@@ -330,6 +351,17 @@ namespace Dynamo.Core
         /// </summary>
         private void SetNodeInfo(CustomNodeInfo newInfo)
         {
+            var guids = NodeInfos.Where(x =>
+                        {
+                            return !string.IsNullOrEmpty(x.Value.Path) &&
+                                string.Compare(x.Value.Path, newInfo.Path, StringComparison.OrdinalIgnoreCase) == 0;
+                        }).Select(x => x.Key).ToList();
+
+            foreach (var guid in guids)
+            {
+                NodeInfos.Remove(guid);
+            }
+
             NodeInfos[newInfo.FunctionId] = newInfo;
             OnInfoUpdated(newInfo);
         }
@@ -357,6 +389,14 @@ namespace Dynamo.Core
             }
             ws = null;
             return false;
+        }
+
+        public bool TryGetFunctionWorkspace(Guid id, bool isTestMode, out ICustomNodeWorkspaceModel ws)
+        {
+            CustomNodeWorkspaceModel workSpace;
+            var result = TryGetFunctionWorkspace(id, isTestMode, out workSpace);
+            ws = workSpace;
+            return result;
         }
 
         /// <summary>
@@ -439,7 +479,7 @@ namespace Dynamo.Core
                 xmlDoc.Load(path);
 
                 WorkspaceInfo header;
-                if (!WorkspaceInfo.FromXmlDocument(xmlDoc, path, isTestMode, AsLogger(), out header))
+                if (!WorkspaceInfo.FromXmlDocument(xmlDoc, path, isTestMode, false, AsLogger(), out header))
                 {
                     Log(String.Format(Properties.Resources.FailedToLoadHeader, path));
                     info = null;
@@ -450,7 +490,8 @@ namespace Dynamo.Core
                     header.Name,
                     header.Category,
                     header.Description, 
-                    path);
+                    path,
+                    header.IsVisibleInDynamoLibrary);
                 return true;
             }
             catch (Exception e)
@@ -502,7 +543,9 @@ namespace Dynamo.Core
                 nodeFactory,
                 nodeGraph.Nodes,
                 nodeGraph.Notes,
-                nodeGraph.Annotations,                               
+                nodeGraph.Annotations,
+                nodeGraph.Presets,              
+                nodeGraph.ElementResolver,
                 workspaceInfo);
 
             
@@ -577,6 +620,7 @@ namespace Dynamo.Core
                     xmlDoc,
                     xmlPath,
                     isTestMode,
+                    false,
                     AsLogger(),
                     out info) && info.IsCustomNodeWorkspace)
                 {
@@ -625,7 +669,8 @@ namespace Dynamo.Core
                 X = 0,
                 Y = 0,
                 ID = newId.ToString(), 
-                FileName = string.Empty
+                FileName = string.Empty,
+                IsVisibleInDynamoLibrary = true
             };
             var workspace = new CustomNodeWorkspaceModel(info, nodeFactory);
 
@@ -669,7 +714,7 @@ namespace Dynamo.Core
         /// <param name="currentWorkspace"> The workspace where</param>
         /// <param name="isTestMode"></param>
         /// <param name="args"></param>
-        public CustomNodeWorkspaceModel Collapse(
+        internal CustomNodeWorkspaceModel Collapse(
             IEnumerable<NodeModel> selectedNodes, WorkspaceModel currentWorkspace,
             bool isTestMode, FunctionNamePromptEventArgs args)
         {
@@ -840,12 +885,13 @@ namespace Dynamo.Core
                 #region Transfer nodes and connectors to new workspace
 
                 var newNodes = new List<NodeModel>();
-
+                var newAnnotations = new List<AnnotationModel>();
+            
                 // Step 4: move all nodes to new workspace remove from old
                 // PB: This could be more efficiently handled by a copy paste, but we
                 // are preservering the node 
                 foreach (var node in selectedNodeSet)
-                {
+                {                   
                     undoRecorder.RecordDeletionForUndo(node);
                     currentWorkspace.RemoveNode(node);
 
@@ -853,14 +899,28 @@ namespace Dynamo.Core
                     // compiled to AST, literally it is still in global scope
                     // instead of in function scope.
                     node.GUID = Guid.NewGuid();
-                    node.RenderPackages.Clear();
 
                     // shift nodes
                     node.X = node.X - leftShift;
                     node.Y = node.Y - topMost;
-
+                 
                     newNodes.Add(node);
                 }
+
+                //Copy the group from newNodes
+                foreach (var group in DynamoSelection.Instance.Selection.OfType<AnnotationModel>())
+                {
+                    undoRecorder.RecordDeletionForUndo(group);
+                    currentWorkspace.RemoveGroup(group);
+
+                    group.GUID = Guid.NewGuid();
+                    group.SelectedModels = group.DeletedModelBases;
+                    newAnnotations.Add(group);
+                }
+                
+                // Now all selected nodes already moved to custom workspace,
+                // clear the selection.
+                DynamoSelection.Instance.ClearSelection();
 
                 foreach (var conn in fullySelectedConns)
                 {
@@ -907,6 +967,7 @@ namespace Dynamo.Core
                         // two kinds of nodes whose input type are available:
                         // function node and custom node. 
                         List<Library.TypedParameter> parameters = null;
+
                         if (inputReceiverNode is Function) 
                         {
                             var func = inputReceiverNode as Function; 
@@ -915,7 +976,16 @@ namespace Dynamo.Core
                         else if (inputReceiverNode is DSFunctionBase)
                         {
                             var dsFunc = inputReceiverNode as DSFunctionBase;
-                            parameters = dsFunc.Controller.Definition.Parameters.ToList(); 
+                            var funcDesc = dsFunc.Controller.Definition;
+                            parameters = funcDesc.Parameters.ToList();
+
+                            if (funcDesc.Type == Engine.FunctionType.InstanceMethod ||
+                                funcDesc.Type == Engine.FunctionType.InstanceProperty)
+                            {
+                                var dummyType = new ProtoCore.Type() { Name = funcDesc.ClassName };
+                                var instanceParam = new TypedParameter(funcDesc.ClassName, dummyType);
+                                parameters.Insert(0, instanceParam);
+                            }
                         }
 
                         // so the input of custom node has format 
@@ -1047,7 +1117,9 @@ namespace Dynamo.Core
                     nodeFactory,
                     newNodes,
                     Enumerable.Empty<NoteModel>(),
-                    Enumerable.Empty<AnnotationModel>(),                
+                    newAnnotations,
+                    Enumerable.Empty<PresetModel>(),
+                    currentWorkspace.ElementResolver,
                     new WorkspaceInfo()
                     {
                         X = 0,
@@ -1057,9 +1129,8 @@ namespace Dynamo.Core
                         Description = args.Description,
                         ID = newId.ToString(),
                         FileName = string.Empty
-                    },
-                    currentWorkspace.ElementResolver);
-
+                    });
+                
                 newWorkspace.HasUnsavedChanges = true;
 
                 RegisterCustomNodeWorkspace(newWorkspace);
@@ -1067,7 +1138,7 @@ namespace Dynamo.Core
                 var collapsedNode = CreateCustomNodeInstance(newId, isTestMode: isTestMode);
                 collapsedNode.X = avgX;
                 collapsedNode.Y = avgY;
-                currentWorkspace.AddNode(collapsedNode, centered: false);
+                currentWorkspace.AddAndRegisterNode(collapsedNode, centered: false);
                 undoRecorder.RecordCreationForUndo(collapsedNode);
 
                 foreach (var connector in
@@ -1095,7 +1166,7 @@ namespace Dynamo.Core
                 {
                     undoRecorder.RecordCreationForUndo(connector);
                 }
-            }
+            } 
             return newWorkspace;
         }
 

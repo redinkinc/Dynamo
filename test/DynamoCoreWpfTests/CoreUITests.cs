@@ -14,7 +14,9 @@ using Dynamo.Selection;
 using Dynamo.Services;
 using Dynamo.Utilities;
 using Dynamo.ViewModels;
+using Dynamo.Wpf.ViewModels.Watch3D;
 using NUnit.Framework;
+using DynamoCoreWpfTests.Utility;
 
 namespace DynamoCoreWpfTests
 {
@@ -27,8 +29,14 @@ namespace DynamoCoreWpfTests
         [Category("DynamoUI")]
         public void CanSaveImage()
         {
-            string path = Path.Combine(TempFolder, "output.png");
+            // Save image command now requires the workspace to be not empty.
+            var testPath = GetTestDirectory(ExecutingDirectory);
+            var openPath = Path.Combine(testPath, @"core\nodeLocationTest.dyn");
 
+            OpenDynamoDefinition(openPath);
+            DispatcherUtil.DoEvents(); // Allows visual tree to be reconstructed.
+
+            string path = Path.Combine(TempFolder, "output.png");
             ViewModel.SaveImageCommand.Execute(path);
 
             Assert.True(File.Exists(path));
@@ -420,7 +428,7 @@ namespace DynamoCoreWpfTests
         {
             // Create number node
             var numNode = new DoubleInput { X = 100, Y = 100 };
-            ViewModel.Model.CurrentWorkspace.AddNode(numNode, true);
+            ViewModel.Model.CurrentWorkspace.AddAndRegisterNode(numNode, true);
         }
 
         #endregion
@@ -432,14 +440,14 @@ namespace DynamoCoreWpfTests
         {
             // Test Case to ensure that the link for these persistent variable
             // between DynamoViewModel, Model is not broken or replaced.
-            #region FullscreenWatchShowing
-            bool expectedValue = !ViewModel.Model.PreferenceSettings.FullscreenWatchShowing;
+            #region BackgroundPreviewActive
+            bool expectedValue = !ViewModel.Model.PreferenceSettings.IsBackgroundPreviewActive;
             ViewModel.ToggleFullscreenWatchShowing(null);
-            Assert.AreEqual(expectedValue, ViewModel.Model.PreferenceSettings.FullscreenWatchShowing);
+            Assert.AreEqual(expectedValue, ViewModel.Model.PreferenceSettings.IsBackgroundPreviewActive);
 
-            expectedValue = !ViewModel.Model.PreferenceSettings.FullscreenWatchShowing;
+            expectedValue = !ViewModel.Model.PreferenceSettings.IsBackgroundPreviewActive;
             ViewModel.ToggleFullscreenWatchShowing(null);
-            Assert.AreEqual(expectedValue, ViewModel.Model.PreferenceSettings.FullscreenWatchShowing);
+            Assert.AreEqual(expectedValue, ViewModel.Model.PreferenceSettings.IsBackgroundPreviewActive);
             #endregion
 
             #region ConsoleHeight
@@ -499,12 +507,12 @@ namespace DynamoCoreWpfTests
 
             initalSetting.ConnectorType = ConnectorType.BEZIER;
             initalSetting.ConsoleHeight = 100;
-            initalSetting.FullscreenWatchShowing = true;
+            initalSetting.IsBackgroundPreviewActive = true;
 
             initalSetting.Save(tempPath);
             resultSetting = PreferenceSettings.Load(tempPath);
 
-            Assert.AreEqual(resultSetting.FullscreenWatchShowing, initalSetting.FullscreenWatchShowing);
+            Assert.AreEqual(resultSetting.IsBackgroundPreviewActive, initalSetting.IsBackgroundPreviewActive);
             Assert.AreEqual(resultSetting.ConnectorType, initalSetting.ConnectorType);
             Assert.AreEqual(resultSetting.ConsoleHeight, initalSetting.ConsoleHeight);
             #endregion
@@ -512,12 +520,12 @@ namespace DynamoCoreWpfTests
             #region Second Test
             initalSetting.ConnectorType = ConnectorType.POLYLINE;
             initalSetting.ConsoleHeight = 0;
-            initalSetting.FullscreenWatchShowing = false;
+            initalSetting.IsBackgroundPreviewActive = false;
 
             initalSetting.Save(tempPath);
             resultSetting = PreferenceSettings.Load(tempPath);
 
-            Assert.AreEqual(resultSetting.FullscreenWatchShowing, initalSetting.FullscreenWatchShowing);
+            Assert.AreEqual(resultSetting.IsBackgroundPreviewActive, initalSetting.IsBackgroundPreviewActive);
             Assert.AreEqual(resultSetting.ConnectorType, initalSetting.ConnectorType);
             Assert.AreEqual(resultSetting.ConsoleHeight, initalSetting.ConsoleHeight);
             #endregion
@@ -525,6 +533,39 @@ namespace DynamoCoreWpfTests
             #endregion
 
             View.Close();
+        }
+
+        [Test]
+        public void PreferenceSettings_ShowEdges_DefaultFalse()
+        {
+            var settings = new PreferenceSettings();
+            Assert.False(settings.ShowEdges);
+        }
+
+        [Test]
+        public void PreferenceSettings_ShowEdges_Toggle()
+        {
+            ViewModel.RenderPackageFactoryViewModel.ShowEdges = false;
+            Assert.False(Model.PreferenceSettings.ShowEdges);
+
+            ViewModel.RenderPackageFactoryViewModel.ShowEdges = true;
+            Assert.True(Model.PreferenceSettings.ShowEdges);
+        }
+
+        [Test]
+        public void PreferenceSettings_ShowEdges_Save()
+        {
+            // Test if variable can be serialize and deserialize without any issue
+            string tempPath = System.IO.Path.GetTempPath();
+            tempPath = Path.Combine(tempPath, "userPreference.xml");
+
+            var initalSetting = new PreferenceSettings();
+            PreferenceSettings resultSetting;
+
+            initalSetting.ShowEdges = true;
+            initalSetting.Save(tempPath);
+            resultSetting = PreferenceSettings.Load(tempPath);
+            Assert.True(resultSetting.ShowEdges);
         }
 
         private void RestartTestSetup(bool startInTestMode)
@@ -548,7 +589,10 @@ namespace DynamoCoreWpfTests
             Model = DynamoModel.Start(
                 new DynamoModel.DefaultStartConfiguration()
                 {
-                    StartInTestMode = startInTestMode
+                    StartInTestMode = startInTestMode,
+                    ProcessMode = startInTestMode 
+                        ? Dynamo.Core.Threading.TaskProcessMode.Synchronous 
+                        : Dynamo.Core.Threading.TaskProcessMode.Asynchronous
                 });
 
             ViewModel = DynamoViewModel.Start(
@@ -609,7 +653,7 @@ namespace DynamoCoreWpfTests
             Assert.IsNotNull(note);
             
             //verify the note was created
-            Assert.AreEqual(1, Model.CurrentWorkspace.Notes.Count);
+            Assert.AreEqual(1, Model.CurrentWorkspace.Notes.Count());
 
             ViewModel.CurrentSpaceViewModel.Model.HasUnsavedChanges = false;
         }
@@ -623,7 +667,7 @@ namespace DynamoCoreWpfTests
             Assert.IsNotNull(note);
 
             //verify the note was created
-            Assert.AreEqual(1, Model.CurrentWorkspace.Notes.Count);
+            Assert.AreEqual(1, Model.CurrentWorkspace.Notes.Count());
 
             //select the note for deletion
             DynamoSelection.Instance.Selection.Add(note);
@@ -631,7 +675,7 @@ namespace DynamoCoreWpfTests
 
             //delete the note
             ViewModel.DeleteCommand.Execute(null);
-            Assert.AreEqual(0,Model.CurrentWorkspace.Notes.Count);
+            Assert.AreEqual(0,Model.CurrentWorkspace.Notes.Count());
 
             ViewModel.CurrentSpaceViewModel.Model.HasUnsavedChanges = false;
            
@@ -645,8 +689,8 @@ namespace DynamoCoreWpfTests
         public void TestDraggedNode()
         {
             var addNode = new DSFunction(ViewModel.Model.LibraryServices.GetFunctionDescriptor("+")) { X = 16, Y = 32 };
-            ViewModel.Model.CurrentWorkspace.AddNode(addNode, false);
-            NodeModel locatable = ViewModel.Model.CurrentWorkspace.Nodes[0];
+            ViewModel.Model.CurrentWorkspace.AddAndRegisterNode(addNode, false);
+            NodeModel locatable = ViewModel.Model.CurrentWorkspace.Nodes.First();
 
             var startPoint = new Point2D(8, 64);
             var dn = new WorkspaceViewModel.DraggedNode(locatable, startPoint);

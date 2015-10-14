@@ -75,11 +75,20 @@ namespace Dynamo.Core
 
         #region virtual properties
 
+        protected virtual string UserDataDirectory
+        {
+            get
+            {
+                return pathManager.UserDataDirectory;
+            }
+        }
+
         protected virtual string PackagesDirectory
         {
             get
             {
-                return this.pathManager.PackagesDirectory;
+                // Only return the default package directory.
+                return pathManager.DefaultPackagesDirectory;
             }
         }
 
@@ -87,7 +96,8 @@ namespace Dynamo.Core
         {
             get
             {
-                return this.pathManager.UserDefinitions;
+                // Only return the default custom node directory.
+                return pathManager.DefaultUserDefinitions;
             }
         }
 
@@ -140,8 +150,10 @@ namespace Dynamo.Core
             using (var fs = new FileStream(this.PreferenceSettingsFilePath, FileMode.Open, FileAccess.Read))
             {
                 settings = serializer.Deserialize(fs) as PreferenceSettings;
+
                 fs.Close(); // Release file lock
             }
+            
             return settings;
         }
 
@@ -154,10 +166,23 @@ namespace Dynamo.Core
         /// /// <returns>new migrator instance after migration</returns>
         protected virtual DynamoMigratorBase MigrateFrom(DynamoMigratorBase sourceMigrator)
         {
-            Copy(sourceMigrator.PackagesDirectory, this.PackagesDirectory);
-            Copy(sourceMigrator.DefinitionsDirectory, this.DefinitionsDirectory);
+            Copy(sourceMigrator.PackagesDirectory, PackagesDirectory);
+            Copy(sourceMigrator.DefinitionsDirectory, DefinitionsDirectory);
 
-            this.PreferenceSettings = sourceMigrator.PreferenceSettings;
+            PreferenceSettings = sourceMigrator.PreferenceSettings;
+            if (PreferenceSettings == null) return this;
+
+            // All preference settings are copied over including custom package folders
+            // However if one of the custom folder locations points to the user data directory
+            // of the previous version, it needs to be replaced with that of the current version
+            var folders = PreferenceSettings.CustomPackageFolders;
+            var indexToReplace = folders.FindIndex(f => f.Contains(sourceMigrator.UserDataDirectory));
+            
+            if (indexToReplace <= -1) return this;
+
+            folders.RemoveAt(indexToReplace);
+            folders.Insert(indexToReplace, UserDataDirectory);
+            
             return this;
         }
 
@@ -172,23 +197,13 @@ namespace Dynamo.Core
         /// <returns>new migrator instance after migration</returns>
         public static DynamoMigratorBase MigrateBetweenDynamoVersions(IPathManager pathManager, IPathResolver pathResolver)
         {
-            // No migration required if the current version is <= version 0.7
-            if (pathManager.MajorFileVersion == 0 &&
-                pathManager.MinorFileVersion <= 7)
-                return null;
-
             var userDataDir = Path.GetDirectoryName(pathManager.UserDataDirectory);
             var versions = GetInstalledVersions(userDataDir).ToList();
             if (versions.Count() < 2)
                 return null; // No need for migration
 
-            DynamoModel.OnRequestMigrationStatusDialog(new SettingsMigrationEventArgs(
-                    SettingsMigrationEventArgs.EventStatusType.Begin));
-
             var previousVersion = versions[1];
             var currentVersion = versions[0];
-            Debug.Assert(currentVersion.MajorPart == pathManager.MajorFileVersion
-                && currentVersion.MinorPart == pathManager.MinorFileVersion);
 
             return Migrate(pathResolver, previousVersion, currentVersion);
         }
@@ -260,7 +275,7 @@ namespace Dynamo.Core
         /// <param name="pathResolver"></param>
         /// <param name="fromVersion"> source Dynamo version from which to migrate </param>
         /// <param name="toVersion"> target Dynamo version into which to migrate </param>
-        /// <returns> new migrator instance after migration </returns>
+        /// <returns> new migrator instance after migration, null if there's no migration </returns>
         internal static DynamoMigratorBase Migrate(IPathResolver pathResolver, FileVersion fromVersion, FileVersion toVersion)
         {
             // Create concrete DynamoMigratorBase object using previousVersion and reflection
@@ -271,7 +286,18 @@ namespace Dynamo.Core
             var targetMigrator = CreateMigrator(pathResolver, toVersion);
             Debug.Assert(targetMigrator != null);
 
-            return targetMigrator.MigrateFrom(sourceMigrator); 
+            bool isPackagesDirectoryEmpty = !Directory.EnumerateFileSystemEntries(targetMigrator.PackagesDirectory).Any();
+            bool isDefinitionsDirectoryEmpty = !Directory.EnumerateFileSystemEntries(targetMigrator.DefinitionsDirectory).Any();
+
+            // Migrate only if both packages and definitions directories are empty
+            if (isPackagesDirectoryEmpty && isDefinitionsDirectoryEmpty)
+            {
+                DynamoModel.OnRequestMigrationStatusDialog(new SettingsMigrationEventArgs(
+                    SettingsMigrationEventArgs.EventStatusType.Begin));
+
+                return targetMigrator.MigrateFrom(sourceMigrator);
+            }
+            return null;
         }
 
         /// <summary>

@@ -10,6 +10,7 @@ using ProtoCore.DSDefinitions;
 using ProtoCore.Lang;
 using ProtoCore.Utils;
 using ProtoCore.SyntaxAnalysis;
+using System.Globalization;
 
 namespace ProtoCore.AST.AssociativeAST
 {
@@ -553,7 +554,7 @@ namespace ProtoCore.AST.AssociativeAST
 
         public override string ToString()
         {
-            return Value.ToString();
+            return Value.ToString(CultureInfo.InvariantCulture);
         }
 
         public override void Accept(AssociativeAstVisitor visitor)
@@ -601,7 +602,7 @@ namespace ProtoCore.AST.AssociativeAST
 
         public override string ToString()
         {
-            return Value.ToString();
+            return Value.ToString(CultureInfo.InvariantCulture);
         }
 
         public override void Accept(AssociativeAstVisitor visitor)
@@ -1352,13 +1353,15 @@ namespace ProtoCore.AST.AssociativeAST
 
     public class ClassAttributes 
     {
+        public string PreferredShortName { get; protected set; }
         public bool HiddenInLibrary { get; protected set; }
         public string ObsoleteMessage { get; protected set; }
         public bool IsObsolete { get { return !string.IsNullOrEmpty(ObsoleteMessage); } }
-        public ClassAttributes(string msg = "")
+        public ClassAttributes(string msg = "", string preferredShortName = "")
         {
             ObsoleteMessage = msg;
             HiddenInLibrary = IsObsolete;
+            PreferredShortName = preferredShortName;
         }
     }
 
@@ -1774,19 +1777,21 @@ namespace ProtoCore.AST.AssociativeAST
 
     public class BinaryExpressionNode : AssociativeNode
     {
+        public int ssaExpressionUID { get; set; }
         public int exprUID { get; set; }
         public int ssaExprID { get; set; }
         public int modBlkUID { get; set; }
         public Guid guid { get; set; }
         public int OriginalAstID { get; set; }    // The original AST that this Binarynode was derived from
         public bool isSSAAssignment { get; set; }
-        public bool isSSAPointerAssignment { get; set; }
         public bool isSSAFirstAssignment { get; set; }
         public bool isMultipleAssign { get; set; }
         public AssociativeNode LeftNode { get; set; }
         public Operator Optr { get; set; }
         public AssociativeNode RightNode { get; set; }
         public bool IsInputExpression { get; set; }
+        public bool isSSAPointerAssignment { get; set; }
+        public bool IsFirstIdentListNode { get; set; }
 
         // These properties are used only for the GraphUI ProtoAST
         public uint Guid { get; set; }
@@ -1807,6 +1812,7 @@ namespace ProtoCore.AST.AssociativeAST
             Optr = optr;
             RightNode = right;
             IsInputExpression = false;
+            IsFirstIdentListNode = false;
         }
 
         public BinaryExpressionNode(BinaryExpressionNode rhs) : base(rhs)
@@ -1828,6 +1834,7 @@ namespace ProtoCore.AST.AssociativeAST
                 RightNode = NodeUtils.Clone(rhs.RightNode);
             }
             IsInputExpression = rhs.IsInputExpression;
+            IsFirstIdentListNode = rhs.IsFirstIdentListNode;
         }
 
         /// <summary>
@@ -1852,6 +1859,7 @@ namespace ProtoCore.AST.AssociativeAST
              LeftNode = lhs;
              RightNode = NodeUtils.Clone(rhs);
              IsInputExpression = false;
+             IsFirstIdentListNode = false;
              
          }
 
@@ -2133,7 +2141,8 @@ namespace ProtoCore.AST.AssociativeAST
                    ToNode.Equals(otherNode.ToNode) &&
                    stepoperator.Equals(otherNode.stepoperator) &&
                    ((StepNode == otherNode.StepNode) || (StepNode != null && StepNode.Equals(otherNode.StepNode))) &&
-                   HasRangeAmountOperator == otherNode.HasRangeAmountOperator;
+                   HasRangeAmountOperator == otherNode.HasRangeAmountOperator
+                   && base.Equals(other);
         }
 
         public override int GetHashCode()
